@@ -387,7 +387,10 @@ def main():
 	opt_class = cem_planner(num_dof, num_batch, w_pos=3, num_elite=0.1, maxiter_cem=30)	
 
 	start_time_comp_cem = time.time()
-	cost, best_cost_g, best_vels, best_traj, xi_mean = opt_class.compute_cem()
+	xi_mean = jnp.zeros(opt_class.nvar)
+	cost, best_cost_g, best_cost_c, best_vels, best_traj, xi_mean = opt_class.compute_cem(xi_mean)
+
+	
 
 	print(f"Total time: {round(time.time()-start_time, 2)}s")
 	print(f"Compute CEM time: {round(time.time()-start_time_comp_cem, 2)}s")

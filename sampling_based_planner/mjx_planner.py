@@ -94,8 +94,10 @@ class cem_planner():
 		self.g = 10
 		self.vec_product = jax.jit(jax.vmap(self.comp_prod, 0, out_axes=(0)))
 
-		self.model_path = f"{os.path.dirname(__file__)}/ur5e_hande_mjx/scene.xml" 
+		#self.model_path = f"{os.path.dirname(__file__)}/ur5e_hande_mjx/scene.xml" 
+		self.model_path = f"{os.path.dirname(__file__)}/panda_mjx/singlearm_panda_tray.xml"
 		self.model = mujoco.MjModel.from_xml_path(self.model_path)
+
 		self.data = mujoco.MjData(self.model)
 		self.model.opt.timestep = self.t
 

@@ -20,7 +20,7 @@
     <!-- <option solimp="0.9 0.95 0.001"> </option> -->
     <!-- <option condim="6"> </option> -->
     <option cone="elliptic"> </option>
-    <option><flag multiccd="enable"/> </option>
+    <option><flag multiccd="disable"/> </option>
 
     <default>
         <default class='torso'>
@@ -38,7 +38,6 @@
             <body name='leftarm' pos='0 -0.4 0' euler='0 0 3.14'>
                 <!-- <include file="panda/assets/chainL.xml" /> -->
                 <include file="panda/assets/chainL_complete.xml" />
-
             </body>
 
             <!-- <body name='rightarm' pos='0 0.4 0' euler='0 0 3.14'>
@@ -46,14 +45,31 @@
             </body> -->
 
         </body>
-    <body name="object" pos="-0.4756487 -0.44454999  2.6048999" quat="0 0.7071068 0 0.7071068">
-            <joint type="free" name="object_virtual_joint_10" damping="5" />
-            <geom type="box" size="0.04 0.04 0.04 " rgba="1 1 0 1" friction="0.6 0.25 0.1" condim="6"/>
-            <inertial pos="0 0 0" mass="0.366" diaginertia="0.000349 0.000349 0.000349"/>
-    </body>
-           
+        <body name="object" pos="-0.4756487 -0.44454999  2.6048999" quat="0 0.7071068 0 0.7071068">
+                <joint type="free" name="object_virtual_joint_10" damping="5" />
+                <geom type="box" size="0.04 0.04 0.04 " rgba="1 1 0 1" friction="0.6 0.25 0.1" condim="6"/>
+                <inertial pos="0 0 0" mass="0.366" diaginertia="0.000349 0.000349 0.000349"/>
+        </body>
         
+        <body name="target_0" pos="-0.1 -0.35 0.5" quat="0 0.70711 0.70711 0">
+            <joint type="free" damping="0.007" name="free_joint_0" group="1"/>
+            <geom name="target_0" pos="0 0 0" rgba="0 0.6 0 1" size="0.02 0.02 0.02" type="box"/>
+        </body>
 
+        <body name="target_1" pos="-0.1 0.45 0.44" quat="0 0.70711 0.70711 0">
+            <geom name="target_1" pos="0 0 0" rgba="0.6 0.6 0.6 1" size="0.02 0.02 0.02" type="box" />
+        </body>
+
+        <body name="obstacle_0" pos="-0.1 0.15 0.5" quat="0.65328 -0.2706 0.65328 0.2706">
+            <geom name="obstacle_0" pos="0 0 0" rgba="0.8 0 0 0" size="0.1 0.1" type="capsule" />
+            <site name="obstacle_0" pos="0 0 0" rgba="0.8 0 0 1" size="0.07 0.07 0.15" type="box" />
+        </body>
+
+        <body name="obstacle_1" pos="-0.2 -0.15 0.5" quat="0.70711 0 0.70711 0">
+            <geom name="obstacle_1" pos="0 0 0" rgba="0.8 0 0 0" size="0.1 0.1" type="capsule"  />
+            <site name="obstacle_1" pos="0 0 0" rgba="0.8 0 0 1" size="0.07 0.07 0.15" type="box" />
+        </body>
+    
     </worldbody>
 
     <include file='panda/assets/actuatorL.xml' />

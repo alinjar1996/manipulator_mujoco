@@ -20,8 +20,10 @@ cem =  cem_planner(
     w_rot=1.5,
     w_col=10,
     num_elite=0.05,
-    timestep=0.05
+    timestep=0.05,
+    init_pos = jnp.array([1.5, -1.8, 1.75, -1.25, -1.6, 0])
     )
+
 print(f"Initialized CEM Planner: {round(time.time()-start_time, 2)}s")
 
 model = cem.model

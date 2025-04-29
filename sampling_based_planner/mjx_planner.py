@@ -16,7 +16,8 @@ import time
 
 class cem_planner():
 
-	def __init__(self, num_dof=6, num_batch=100, num_steps=200, timestep=0.02, maxiter_cem=20, num_elite=0.1, w_pos=2, w_rot=0.03, w_col=0.1):
+	def __init__(self, num_dof=6, num_batch=100, num_steps=200, timestep=0.02, maxiter_cem=20, num_elite=0.1, w_pos=2, w_rot=0.03, w_col=0.1, 
+				 init_pos = jnp.array([1.5, -1.8, 1.75, -1.25, -1.6, 0])):
 		super(cem_planner, self).__init__()
 	 
 		self.num_dof = num_dof
@@ -29,7 +30,8 @@ class cem_planner():
 			'w_rot': w_rot,
 			'w_col': w_col,
 		}
-
+		self.initial_pos = init_pos
+		
 		self.t_fin = self.num*self.t
 		
 		tot_time = np.linspace(0, self.t_fin, self.num)
@@ -341,12 +343,16 @@ class cem_planner():
 	@partial(jax.jit, static_argnums=(0,))
 	def compute_cem(
 		self, xi_mean, 
-		init_pos=jnp.array([1.5, -1.8, 1.75, -1.25, -1.6, 0]), 
+		#init_pos=jnp.array([1.5, -1.8, 1.75, -1.25, -1.6, 0]), 
+		init_pos = None,
 		init_vel=jnp.zeros(6), 
 		init_acc=jnp.zeros(6),
 		target_pos=jnp.zeros(3),
 		target_rot=jnp.zeros(4)
 		):
+
+		if init_pos is None:
+			init_pos = self.initial_pos
 
 		theta_init = jnp.tile(init_pos, (self.num_batch, 1))
 		thetadot_init = jnp.tile(init_vel, (self.num_batch, 1))

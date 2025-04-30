@@ -115,9 +115,11 @@ class cem_planner():
 		self.mask = jnp.any(jnp.isin(self.mjx_data.contact.geom, self.geom_ids), axis=1)
 		# self.mask = jnp.where(self.mask==2, 0, self.mask)
 		# self.mask = self.mask.astype(bool)
-
-		self.hande_id = self.model.body(name="hande").id
-		self.tcp_id = self.model.site(name="tcp").id
+        #left_panda_link7
+		#self.hande_id = self.model.body(name="hande").id
+		self.hande_id = self.model.body(name="left_panda_link7").id
+		#self.tcp_id = self.model.site(name="tcp").id
+		self.tcp_id = self.model.site(name="end_effector").id
 
 		self.compute_rollout_batch = jax.vmap(self.compute_rollout_single, in_axes = (0, None, None))
 		self.compute_cost_batch = jax.vmap(self.compute_cost_single, in_axes = (0))

@@ -51,8 +51,8 @@ thetadot_list = list()
 theta_list = list()
 
 # init_position = data.xpos[model.body(name="hande").id].copy()
-init_position = data.site_xpos[model.site(name="tcp").id].copy()
-init_rotation = data.xquat[model.body(name="hande").id].copy()
+init_position = data.site_xpos[model.site(name="end_effector").id].copy()
+init_rotation = data.xquat[model.body(name="left_panda_link7").id].copy()
 
 # target_positions = [
 #     [-0.3, 0.3, 0.8],

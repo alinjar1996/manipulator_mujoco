@@ -21,14 +21,14 @@ cem =  cem_planner(
     w_col=10,
     num_elite=0.05,
     timestep=0.05,
-    init_pos = jnp.array([1.5, -1.8, 1.75, -1.25, -1.6, 0])
+    init_pos = jnp.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
     )
 
 print(f"Initialized CEM Planner: {round(time.time()-start_time, 2)}s")
 
 model = cem.model
 data = cem.data
-data.qpos[:6] = jnp.array([1.5, -1.8, 1.75, -1.25, -1.6, 0])
+data.qpos[:6] = jnp.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 mujoco.mj_forward(model, data)
 
 xi_mean = jnp.zeros(cem.nvar)

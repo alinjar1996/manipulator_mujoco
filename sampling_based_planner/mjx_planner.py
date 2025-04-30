@@ -4,7 +4,7 @@ xla_flags = os.environ.get('XLA_FLAGS', '')
 xla_flags += ' --xla_gpu_triton_gemm_any=True'
 os.environ['XLA_FLAGS'] = xla_flags
 
-import bernstein_coeff_order10_arbitinterval
+import bernstein_coeff_order10_arbitinterval, bernstein_coeff_ordern_arbitinterval
 from functools import partial
 import numpy as np
 import jax.numpy as jnp
@@ -36,8 +36,12 @@ class cem_planner():
 		self.tot_time = tot_time
 		tot_time_copy = tot_time.reshape(self.num, 1)
 		
-		self.P, self.Pdot, self.Pddot = bernstein_coeff_order10_arbitinterval.bernstein_coeff_order10_new(10, tot_time_copy[0], tot_time_copy[-1], tot_time_copy)
+		self.P, self.Pdot, self.Pddot = bernstein_coeff_ordern_arbitinterval.bernstein_coeff_ordern_new(10, tot_time_copy[0], tot_time_copy[-1], tot_time_copy)
+		#self.P, self.Pdot, self.Pddot = bernstein_coeff_order10_arbitinterval.bernstein_coeff_order10_new(10, tot_time_copy[0], tot_time_copy[-1], tot_time_copy)
+        
+		#print("self.P", self.P.shape)
 
+		
 		self.P_jax, self.Pdot_jax, self.Pddot_jax = jnp.asarray(self.P), jnp.asarray(self.Pdot), jnp.asarray(self.Pddot)
 
 		self.nvar_single = jnp.shape(self.P_jax)[1]

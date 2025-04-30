@@ -13,7 +13,7 @@ import scipy.special
 def bernstein_coeff_order10_new(n, tmin, tmax, t_actual):
 
 
-
+        
 		l = tmax-tmin
 
 		t = (t_actual-tmin)/l

@@ -208,7 +208,7 @@ class cem_planner():
 		s_v = jnp.maximum( jnp.zeros(( self.num_batch, 2*self.num*self.num_dof )), -jnp.dot(self.A_v_ineq, primal_sol.T).T+b_v  )
 		res_v = jnp.dot(self.A_v_ineq, primal_sol.T).T-b_v+s_v 
 
-		s_a = jnp.maximum( jnp.zeros(( self.num_batch, 2*self.num*self.num_dof )), -jnp.dot(self.A_a_ineq, primal_sol.T).T+b_v  )
+		s_a = jnp.maximum( jnp.zeros(( self.num_batch, 2*self.num*self.num_dof )), -jnp.dot(self.A_a_ineq, primal_sol.T).T+b_a  )
 		res_a = jnp.dot(self.A_a_ineq, primal_sol.T).T-b_a+s_a 
 
 		s_p = jnp.maximum( jnp.zeros(( self.num_batch, 2*self.num*self.num_dof )), -jnp.dot(self.A_p_ineq, primal_sol.T).T+b_p  )

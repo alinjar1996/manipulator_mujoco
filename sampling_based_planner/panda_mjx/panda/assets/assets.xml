@@ -36,7 +36,7 @@
                 <geom contype="0" conaffinity="0" group="0" type="mesh" rgba=".92 .92 .95 1"/>
             </default>
             <default class="object_col">
-                <geom contype="1" conaffinity="1" group="3" type="mesh" rgba=".5 .6 .7 1"/>
+                <geom contype="0" conaffinity="0" group="0" type="mesh" rgba=".5 .6 .7 1"/>
             </default>
         </default>
     </default>
@@ -52,7 +52,7 @@
             </default>
 
             <default class="panda_col">
-                <geom contype="1" conaffinity="1" group="3" type="mesh" rgba=".5 .6 .7 1"/>
+                <geom contype="0" conaffinity="0" group="0" type="mesh" rgba=".5 .6 .7 1"/>
             </default>
             <default class="panda_arm">
                 <joint damping="100"/>

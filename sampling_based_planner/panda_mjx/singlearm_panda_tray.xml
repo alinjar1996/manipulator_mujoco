@@ -13,8 +13,9 @@
 
     <compiler meshdir="" />
 
-    <option noslip_iterations="500" />
-    <option solver="Newton" iterations="100" tolerance="1e-5"/>
+    <option noslip_iterations="50" /> 
+    <!-- #500 -->
+    <option solver="Newton" iterations="10" tolerance="1e-3"/>
 
     <!-- <option noslip_iterations="20"> </option> -->
     <!-- <option solimp="0.9 0.95 0.001"> </option> -->
@@ -24,7 +25,7 @@
 
     <default>
         <default class='torso'>
-            <geom group='2' contype='0' conaffinity='0' rgba=".95 .99 .92 1" />
+            <geom group='0' contype='0' conaffinity='0' rgba=".95 .99 .92 1" />
         </default>/ </default>
 
     <worldbody>

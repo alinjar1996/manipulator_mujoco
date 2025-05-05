@@ -50,23 +50,10 @@ cost_c_list = list()
 thetadot_list = list()
 theta_list = list()
 
-# init_position = data.xpos[model.body(name="hande").id].copy()
-init_position = data.site_xpos[model.site(name="end_effector").id].copy()
-init_rotation = data.xquat[model.body(name="left_panda_link7").id].copy()
+init_position = data.xpos[model.body(name="hand").id].copy()
+#init_position = data.site_xpos[model.site(name="gripper").id].copy()
+init_rotation = data.xquat[model.body(name="hand").id].copy()
 
-# target_positions = [
-#     [-0.3, 0.3, 0.8],
-#     [-0.2, -0.4, 1.0],
-#     [-0.3, -0.1, 0.8],
-#     init_position
-# ]
-
-# target_rotations = [
-#     rotation_quaternion(-135, np.array([1,0,0])),
-#     quaternion_multiply(rotation_quaternion(90, np.array([0,0,1])),rotation_quaternion(135, np.array([1,0,0]))),
-#     quaternion_multiply(rotation_quaternion(180, np.array([0,0,1])),rotation_quaternion(-90, np.array([0,1,0]))),
-#     init_rotation
-# ]
 
 target_idx = 0
 

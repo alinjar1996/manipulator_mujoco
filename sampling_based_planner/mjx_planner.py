@@ -287,7 +287,7 @@ class cem_planner():
 		g = -collision[:, 1:]+collision[:, :-1]-y*collision[:, :-1]
 		cost_c = jnp.sum(jnp.max(g.reshape(g.shape[0], g.shape[1], 1), axis=-1, initial=0)) + jnp.sum(jnp.where(collision<0, True, False))
 
-		cost = self.cost_weights['w_pos']*cost_g + self.cost_weights['w_rot']*cost_r + self.cost_weights['w_col']*cost_c
+		cost = self.cost_weights['w_pos']*cost_g + self.cost_weights['w_rot']*cost_r # self.cost_weights['w_col']*cost_c
 		return cost, cost_g_, cost_c
 	
 	@partial(jax.jit, static_argnums=(0, ))
@@ -393,7 +393,9 @@ def main():
 	num_batch = 500
 
 	start_time = time.time()
-	opt_class = cem_planner(num_dof, num_batch, w_pos=3, num_elite=0.1, maxiter_cem=30)	
+	opt_class = cem_planner(num_dof=6, num_batch=2000, num_steps=50, maxiter_cem=30,
+                           w_pos=1, w_rot=0.5, w_col=10, num_elite=0.05, timestep=0.05)
+	# opt_class = cem_planner(num_dof, num_batch, w_pos=3, num_elite=0.1, maxiter_cem=30)	
 
 	start_time_comp_cem = time.time()
 	xi_mean = jnp.zeros(opt_class.nvar)
@@ -404,10 +406,12 @@ def main():
 	print(f"Total time: {round(time.time()-start_time, 2)}s")
 	print(f"Compute CEM time: {round(time.time()-start_time_comp_cem, 2)}s")
 
-	np.savetxt('data/output_costs.csv',cost, delimiter=",")
-	np.savetxt('data/best_vels.csv',best_vels, delimiter=",")
-	np.savetxt('data/best_traj.csv',best_traj, delimiter=",")
-	np.savetxt('data/best_cost_g.csv',best_cost_g, delimiter=",")
+	os.makedirs('data', exist_ok=True)
+
+	np.savetxt('sampling_based_planner/data/output_costs.csv',cost, delimiter=",")
+	np.savetxt('sampling_based_planner/data/best_vels.csv',best_vels, delimiter=",")
+	# np.savetxt('data/best_traj.csv',best_traj, delimiter=",")
+	# np.savetxt('data/best_cost_g.csv',best_cost_g, delimiter=",")
 
 	
 	

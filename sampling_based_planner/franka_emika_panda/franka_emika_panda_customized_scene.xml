@@ -10,8 +10,9 @@
 
     <option noslip_iterations="50" /> 
     <!-- #500 -->
-    <option solver="Newton" iterations="10" tolerance="1e-3"/>
-
+    <option solver="Newton" iterations="1" ls_iterations="5">
+    <flag eulerdamp="disable" actuation="disable" sensor="disable"/>
+    </option>
     <!-- <option noslip_iterations="20"> </option> -->
     <!-- <option solimp="0.9 0.95 0.001"> </option> -->
     <!-- <option condim="6"> </option> -->

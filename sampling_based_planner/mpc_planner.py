@@ -13,22 +13,22 @@ from quat_math import rotation_quaternion, quaternion_multiply, quaternion_dista
 start_time = time.time()
 cem =  cem_planner(
     num_dof=6, 
-    num_batch=800, 
-    num_steps=8, 
-    maxiter_cem=1,
+    num_batch=1000,
+    num_steps=8,
+    maxiter_cem=20,
     w_pos=5,
     w_rot=1.5,
     w_col=10,
-    num_elite=0.05,
+    num_elite=0.1,
     timestep=0.05,
-    init_pos = jnp.array([1.5, -1.8, 1.75, -1.25, -1.6, 0])
+    init_pos = jnp.array([0, 0, 0, 0, 0, 0])
     )
 
 print(f"Initialized CEM Planner: {round(time.time()-start_time, 2)}s")
 
 model = cem.model
 data = cem.data
-data.qpos[:6] = jnp.array([1.5, -1.8, 1.75, -1.25, -1.6, 0])
+data.qpos[:6] = jnp.array([0, 0, 0, 0, 0, 0])
 mujoco.mj_forward(model, data)
 
 xi_mean = jnp.zeros(cem.nvar)
@@ -81,8 +81,11 @@ with viewer.launch_passive(model, data) as viewer_:
         cost, best_cost_g, best_cost_c, best_vels, best_traj, xi_mean = cem.compute_cem(xi_mean, data.qpos[:6], data.qvel[:6], data.qacc[:6], target_pos, target_rot)
         thetadot = np.mean(best_vels[1:5], axis=0)
         # thetadot = best_vels[1]
+        print("thetadot_cem", thetadot)
 
+       #thetadot = np.array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1])
         data.qvel[:6] = thetadot
+
         mujoco.mj_step(model, data)
 
         cost_g = np.linalg.norm(data.site_xpos[cem.tcp_id] - target_pos)   

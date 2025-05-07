@@ -108,7 +108,7 @@ class cem_planner():
 
 		# self.obst_ids = np.array([self.model.body(name= f'obstacle_{i}').id for i in range(2)])
 		self.obst_0_pos = self.mjx_data.xpos[self.model.body(name= 'obstacle_0').id]
-		self.obst_1_pos = self.mjx_data.xpos[self.model.body(name= 'obstacle_1').id]
+		# self.obst_1_pos = self.mjx_data.xpos[self.model.body(name= 'obstacle_1').id]
 
 		self.geom_ids = np.array([mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, f'robot_{i}') for i in range(10)])
 		# self.mask = jnp.sum(jnp.isin(self.mjx_data.contact.geom, self.geom_ids), axis=1)
@@ -333,7 +333,7 @@ class cem_planner():
 
 		thetadot = jnp.dot(self.A_thetadot, xi_filtered.T).T
 
-		jax.debug.print("thetadot has NaNs: {}", jnp.any(jnp.isnan(thetadot)))
+		#jax.debug.print("thetadot has NaNs: {}", jnp.any(jnp.isnan(thetadot)))
 
 		theta, eef_pos, eef_rot, collision = self.compute_rollout_batch(thetadot, init_pos, init_vel)
 

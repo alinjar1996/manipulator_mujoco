@@ -9,12 +9,15 @@ from mujoco import viewer
 
 class Visualizer():
     def __init__(self, ctrl: bool=False, traj: bool=False):
-        self.init_joint_state = np.array([0, 0, 0, 0, 0, 0])
-
+        #self.init_joint_state = np.array([1.5, -1.8, 1.75, -1.25, -1.6, 0])
+        self.init_joint_state = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+          
         if ctrl:
             model_path = f"{os.path.dirname(__file__)}/sampling_based_planner/franka_emika_panda/franka_emika_panda_customized_scene.xml"
+            #model_path = f"{os.path.dirname(__file__)}/sampling_based_planner/ur5e_hande_mjx/scene.xml"
         else:
             model_path = f"{os.path.dirname(__file__)}/sampling_based_planner/franka_emika_panda/franka_emika_panda_customized_scene.xml"
+            #model_path = f"{os.path.dirname(__file__)}/sampling_based_planner/ur5e_hande_mjx/scene.xml"
 
         self.model = mujoco.MjModel.from_xml_path(model_path)
         self.model.opt.timestep = 0.05
@@ -22,7 +25,8 @@ class Visualizer():
         self.data.qpos[:6] = self.init_joint_state
 
         if traj:
-            file_path = f"{os.path.dirname(__file__)}/sampling_based_planner/data/best_vels.csv"
+            #file_path = f"{os.path.dirname(__file__)}/sampling_based_planner/data/best_vels.csv"
+            file_path = f"{os.path.dirname(__file__)}/cem_optimizer_data/thetadot.csv"
             self.thetadot = np.genfromtxt(file_path, delimiter=',')
 
 

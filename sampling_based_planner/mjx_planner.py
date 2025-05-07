@@ -360,11 +360,15 @@ class cem_planner():
 
 		thetadot = jnp.dot(self.A_thetadot, xi_filtered.T).T
 
-		jax.debug.print("thetadot has NaNs: {}", jnp.any(jnp.isnan(thetadot)))
+		# jax.debug.print("thetadot has NaNs: {}", jnp.any(jnp.isnan(thetadot)))
 
 		theta, eef_pos, eef_rot, collision = self.compute_rollout_batch(thetadot, init_pos, init_vel)
 
-		jax.debug.print("theta: {}", theta)
+		jax.debug.print("eef_pos has NaNs: {}", jnp.any(jnp.isnan(eef_pos)))
+
+		jax.debug.print("eef_rot has NaNs: {}", jnp.any(jnp.isnan(eef_rot)))
+
+		# jax.debug.print("theta: {}", theta)
  
 		cost_batch, cost_g_batch, cost_c_batch, cost_r_batch = self.compute_cost_batch(thetadot, eef_pos, eef_rot, collision, target_pos, target_rot)
 
@@ -382,11 +386,11 @@ class cem_planner():
 		# jax.debug.print("xi_mean has NaNs: {}", jnp.any(jnp.isnan(xi_mean)))
 		# jax.debug.print("xi_cov has NaNs: {}", jnp.any(jnp.isnan(xi_cov)))
 
-		jax.debug.print("theta has NaNs: {}", jnp.any(jnp.isnan(theta)))
-		jax.debug.print("eef_pos has NaNs: {}", jnp.any(jnp.isnan(eef_pos)))
-		jax.debug.print("eef_rot has NaNs: {}", jnp.any(jnp.isnan(eef_rot)))
-		jax.debug.print("target_pos has NaNs: {}", jnp.any(jnp.isnan(target_pos)))
-		jax.debug.print("target_rot has NaNs: {}", jnp.any(jnp.isnan(target_rot)))
+		# jax.debug.print("theta has NaNs: {}", jnp.any(jnp.isnan(theta)))
+		# jax.debug.print("eef_pos has NaNs: {}", jnp.any(jnp.isnan(eef_pos)))
+		# jax.debug.print("eef_rot has NaNs: {}", jnp.any(jnp.isnan(eef_rot)))
+		# jax.debug.print("target_pos has NaNs: {}", jnp.any(jnp.isnan(target_pos)))
+		# jax.debug.print("target_rot has NaNs: {}", jnp.any(jnp.isnan(target_rot)))
         
 		# jax.debug.print("cost_batch: {}", cost_batch)
 		
@@ -465,7 +469,7 @@ def main():
 	print(f"Total time: {round(time.time()-start_time, 2)}s")
 	print(f"Compute CEM time: {round(time.time()-start_time_comp_cem, 2)}s")
 
-	os.makedirs('data', exist_ok=True)
+	os.makedirs('sampling_based_planner/data', exist_ok=True)
 
 	np.savetxt('sampling_based_planner/data/output_costs.csv',cost, delimiter=",")
 	np.savetxt('sampling_based_planner/data/best_vels.csv',best_vels, delimiter=",")

@@ -333,7 +333,16 @@ class cem_planner():
 
 		thetadot = jnp.dot(self.A_thetadot, xi_filtered.T).T
 
+		jax.debug.print("thetadot has NaNs: {}", jnp.any(jnp.isnan(thetadot)))
+
 		theta, eef_pos, eef_rot, collision = self.compute_rollout_batch(thetadot, init_pos, init_vel)
+
+		# jax.debug.print("theta has NaNs: {}", jnp.any(jnp.isnan(theta)))
+		# jax.debug.print("eef_pos has NaNs: {}", jnp.any(jnp.isnan(eef_pos)))
+		# jax.debug.print("eef_rot has NaNs: {}", jnp.any(jnp.isnan(eef_rot)))
+		# jax.debug.print("target_pos has NaNs: {}", jnp.any(jnp.isnan(target_pos)))
+		# jax.debug.print("target_rot has NaNs: {}", jnp.any(jnp.isnan(target_rot)))
+
 		cost_batch, cost_g_batch, cost_c_batch = self.compute_cost_batch(thetadot, eef_pos, eef_rot, collision, target_pos, target_rot)
 
 		xi_ellite, idx_ellite, cost_ellite = self.compute_ellite_samples(cost_batch, xi_samples)

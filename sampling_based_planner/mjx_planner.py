@@ -117,8 +117,12 @@ class cem_planner():
 		# self.mask = jnp.where(self.mask==2, 0, self.mask)
 		# self.mask = self.mask.astype(bool)
 		self.hande_id = self.model.body(name="hand").id
+
 		#self.tcp_id = self.model.site(name="tcp").id
 		self.tcp_id = self.model.site(name="gripper").id
+
+		# print("self.hande_id", self.hande_id)
+		# print("self.tcp_id", self.tcp_id)
 
 		self.compute_rollout_batch = jax.vmap(self.compute_rollout_single, in_axes = (0, None, None))
 		self.compute_cost_batch = jax.vmap(self.compute_cost_single, in_axes = (0))
@@ -266,8 +270,21 @@ class cem_planner():
 		mjx_data = self.mjx_data
 		qvel = mjx_data.qvel.at[:self.num_dof].set(init_vel)
 		qpos = mjx_data.qpos.at[:self.num_dof].set(init_pos)
+        
+		# jax.debug.print("qpos: {}", qpos)
+		# jax.debug.print("qpos has NaNs: {}", jnp.any(jnp.isnan(qpos)))
+
+		# jax.debug.print("qvel: {}", qvel)
+		# jax.debug.print("qvel has NaNs: {}", jnp.any(jnp.isnan(qvel)))
+
 		mjx_data = mjx_data.replace(qvel=qvel, qpos=qpos)
 		thetadot_single = thetadot.reshape(self.num_dof, self.num)
+
+		#jax.debug.print("thetadot_single: {}", thetadot_single)
+		
+		#jax.debug.print("thetadot_single has NaNs: {}", jnp.any(jnp.isnan(thetadot_single)))
+	  
+	    
 		_, out = jax.lax.scan(self.mjx_step, mjx_data, thetadot_single.T, length=self.num)
 		theta, eef_pos, eef_rot, collision = out
 		return theta.T.flatten(), eef_pos, eef_rot, collision
@@ -282,13 +299,14 @@ class cem_planner():
 		cost_r_ = 2 * jnp.arccos(dot_product)
 		cost_r = cost_r_[-1] + jnp.sum(cost_r_[:-1])*1
 
+		#jax.debug.print("cost_r: {}", cost_r) 
 		y = 0.005
 		collision = collision.T
 		g = -collision[:, 1:]+collision[:, :-1]-y*collision[:, :-1]
 		cost_c = jnp.sum(jnp.max(g.reshape(g.shape[0], g.shape[1], 1), axis=-1, initial=0)) + jnp.sum(jnp.where(collision<0, True, False))
 
 		cost = self.cost_weights['w_pos']*cost_g + self.cost_weights['w_rot']*cost_r # self.cost_weights['w_col']*cost_c
-		return cost, cost_g_, cost_c
+		return cost, cost_g_, cost_c, cost_r
 	
 	@partial(jax.jit, static_argnums=(0, ))
 	def compute_ellite_samples(self, cost_batch, xi_filtered):
@@ -319,7 +337,7 @@ class cem_planner():
 		mean_control = (1-self.alpha_mean)*mean_control_prev + self.alpha_mean*(jnp.sum( (xi_ellite * w[:,jnp.newaxis]) , axis= 0)/ sum_w)
 		diffs = (xi_ellite - mean_control)
 		prod_result = self.vec_product(diffs, w)
-		cov_control = (1-self.alpha_cov)*cov_control_prev + self.alpha_cov*(jnp.sum( prod_result , axis = 0)/jnp.sum(w, axis = 0)) + 0.0001*jnp.identity(self.nvar)
+		cov_control = (1-self.alpha_cov)*cov_control_prev + self.alpha_cov*(jnp.sum( prod_result , axis = 0)/jnp.sum(w, axis = 0)) + 0.1*jnp.identity(self.nvar)
 		return mean_control, cov_control
 	
 	@partial(jax.jit, static_argnums=(0,))
@@ -329,13 +347,54 @@ class cem_planner():
 		xi_mean_prev = xi_mean 
 		xi_cov_prev = xi_cov
 
+		# jax.debug.print("xi_mean: {}", xi_mean)
+		# jax.debug.print("xi_cov: {}", xi_cov)
+
 		xi_samples, key = self.compute_xi_samples(key, xi_mean, xi_cov)
+
+		#jax.debug.print("xi_samples: {}", xi_samples)
+		
 		xi_filtered = self.compute_projection_filter(xi_samples, state_term)
+
+		#jax.debug.print("xi_filtered: {}", xi_filtered)
 
 		thetadot = jnp.dot(self.A_thetadot, xi_filtered.T).T
 
+		jax.debug.print("thetadot has NaNs: {}", jnp.any(jnp.isnan(thetadot)))
+
 		theta, eef_pos, eef_rot, collision = self.compute_rollout_batch(thetadot, init_pos, init_vel)
-		cost_batch, cost_g_batch, cost_c_batch = self.compute_cost_batch(thetadot, eef_pos, eef_rot, collision, target_pos, target_rot)
+
+		jax.debug.print("theta: {}", theta)
+ 
+		cost_batch, cost_g_batch, cost_c_batch, cost_r_batch = self.compute_cost_batch(thetadot, eef_pos, eef_rot, collision, target_pos, target_rot)
+
+		# jax.debug.print("eef_pos: {}", eef_pos)
+
+		# jax.debug.print("eef_rot: {}", eef_rot)
+
+		# jax.debug.print("target_pos: {}", target_pos)
+
+		# jax.debug.print("target_rot: {}", target_rot)
+
+		# jax.debug.print("init_pos has NaNs: {}", jnp.any(jnp.isnan(init_pos)))
+ 
+		# jax.debug.print("init_vel has NaNs: {}", jnp.any(jnp.isnan(init_vel)))
+		# jax.debug.print("xi_mean has NaNs: {}", jnp.any(jnp.isnan(xi_mean)))
+		# jax.debug.print("xi_cov has NaNs: {}", jnp.any(jnp.isnan(xi_cov)))
+
+		jax.debug.print("theta has NaNs: {}", jnp.any(jnp.isnan(theta)))
+		jax.debug.print("eef_pos has NaNs: {}", jnp.any(jnp.isnan(eef_pos)))
+		jax.debug.print("eef_rot has NaNs: {}", jnp.any(jnp.isnan(eef_rot)))
+		jax.debug.print("target_pos has NaNs: {}", jnp.any(jnp.isnan(target_pos)))
+		jax.debug.print("target_rot has NaNs: {}", jnp.any(jnp.isnan(target_rot)))
+        
+		# jax.debug.print("cost_batch: {}", cost_batch)
+		
+		# jax.debug.print("cost_r_batch: {}", cost_r_batch)
+
+		# jax.debug.print("cost_g_batch: {}", cost_g_batch)
+
+		# jax.debug.print("cost_c_batch: {}", cost_c_batch)
 
 		xi_ellite, idx_ellite, cost_ellite = self.compute_ellite_samples(cost_batch, xi_samples)
 		xi_mean, xi_cov = self.compute_mean_cov(cost_ellite, xi_mean_prev, xi_cov_prev, xi_ellite)

@@ -271,19 +271,12 @@ class cem_planner():
 		qvel = mjx_data.qvel.at[:self.num_dof].set(init_vel)
 		qpos = mjx_data.qpos.at[:self.num_dof].set(init_pos)
         
-		# jax.debug.print("qpos: {}", qpos)
-		# jax.debug.print("qpos has NaNs: {}", jnp.any(jnp.isnan(qpos)))
 
-		# jax.debug.print("qvel: {}", qvel)
-		# jax.debug.print("qvel has NaNs: {}", jnp.any(jnp.isnan(qvel)))
 
 		mjx_data = mjx_data.replace(qvel=qvel, qpos=qpos)
 		thetadot_single = thetadot.reshape(self.num_dof, self.num)
 
-		#jax.debug.print("thetadot_single: {}", thetadot_single)
-		
-		#jax.debug.print("thetadot_single has NaNs: {}", jnp.any(jnp.isnan(thetadot_single)))
-	  
+
 	    
 		_, out = jax.lax.scan(self.mjx_step, mjx_data, thetadot_single.T, length=self.num)
 		theta, eef_pos, eef_rot, collision = out
@@ -347,9 +340,6 @@ class cem_planner():
 		xi_mean_prev = xi_mean 
 		xi_cov_prev = xi_cov
 
-		# jax.debug.print("xi_mean: {}", xi_mean)
-		# jax.debug.print("xi_cov: {}", xi_cov)
-
 		xi_samples, key = self.compute_xi_samples(key, xi_mean, xi_cov)
 
 		#jax.debug.print("xi_samples: {}", xi_samples)
@@ -364,41 +354,11 @@ class cem_planner():
 
 		theta, eef_pos, eef_rot, collision = self.compute_rollout_batch(thetadot, init_pos, init_vel)
 
-		jax.debug.print("eef_pos has NaNs: {}", jnp.any(jnp.isnan(eef_pos)))
-
-		jax.debug.print("eef_rot has NaNs: {}", jnp.any(jnp.isnan(eef_rot)))
-
-		# jax.debug.print("theta: {}", theta)
  
 		cost_batch, cost_g_batch, cost_c_batch, cost_r_batch = self.compute_cost_batch(thetadot, eef_pos, eef_rot, collision, target_pos, target_rot)
 
 		# jax.debug.print("eef_pos: {}", eef_pos)
 
-		# jax.debug.print("eef_rot: {}", eef_rot)
-
-		# jax.debug.print("target_pos: {}", target_pos)
-
-		# jax.debug.print("target_rot: {}", target_rot)
-
-		# jax.debug.print("init_pos has NaNs: {}", jnp.any(jnp.isnan(init_pos)))
- 
-		# jax.debug.print("init_vel has NaNs: {}", jnp.any(jnp.isnan(init_vel)))
-		# jax.debug.print("xi_mean has NaNs: {}", jnp.any(jnp.isnan(xi_mean)))
-		# jax.debug.print("xi_cov has NaNs: {}", jnp.any(jnp.isnan(xi_cov)))
-
-		# jax.debug.print("theta has NaNs: {}", jnp.any(jnp.isnan(theta)))
-		# jax.debug.print("eef_pos has NaNs: {}", jnp.any(jnp.isnan(eef_pos)))
-		# jax.debug.print("eef_rot has NaNs: {}", jnp.any(jnp.isnan(eef_rot)))
-		# jax.debug.print("target_pos has NaNs: {}", jnp.any(jnp.isnan(target_pos)))
-		# jax.debug.print("target_rot has NaNs: {}", jnp.any(jnp.isnan(target_rot)))
-        
-		# jax.debug.print("cost_batch: {}", cost_batch)
-		
-		# jax.debug.print("cost_r_batch: {}", cost_r_batch)
-
-		# jax.debug.print("cost_g_batch: {}", cost_g_batch)
-
-		# jax.debug.print("cost_c_batch: {}", cost_c_batch)
 
 		xi_ellite, idx_ellite, cost_ellite = self.compute_ellite_samples(cost_batch, xi_samples)
 		xi_mean, xi_cov = self.compute_mean_cov(cost_ellite, xi_mean_prev, xi_cov_prev, xi_ellite)
@@ -456,6 +416,10 @@ def main():
 	num_batch = 500
 
 	start_time = time.time()
+
+	target_pos = np.array([-0.3, 0, 0.9])
+	target_rot = np.array([0, 0.70711, 0.70711, 0])
+	
 	opt_class = cem_planner(num_dof=6, num_batch=2000, num_steps=50, maxiter_cem=30,
                            w_pos=1, w_rot=0.5, w_col=10, num_elite=0.05, timestep=0.05)
 	# opt_class = cem_planner(num_dof, num_batch, w_pos=3, num_elite=0.1, maxiter_cem=30)	

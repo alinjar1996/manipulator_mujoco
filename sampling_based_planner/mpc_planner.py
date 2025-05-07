@@ -14,13 +14,13 @@ start_time = time.time()
 cem =  cem_planner(
     num_dof=6, 
     num_batch=1000,
-    num_steps=8,
-    maxiter_cem=20,
+    num_steps=40,
+    maxiter_cem=1,
     w_pos=5,
     w_rot=1.5,
     w_col=10,
     num_elite=0.1,
-    timestep=0.05,
+    timestep=0.01,
     init_pos = jnp.array([0, 0, 0, 0, 0, 0])
     )
 
@@ -79,7 +79,7 @@ with viewer.launch_passive(model, data) as viewer_:
             model.body(name="target_0").quat = data.xquat[cem.hande_id]
 
         cost, best_cost_g, best_cost_c, best_vels, best_traj, xi_mean = cem.compute_cem(xi_mean, data.qpos[:6], data.qvel[:6], data.qacc[:6], target_pos, target_rot)
-        thetadot = np.mean(best_vels[1:5], axis=0)
+        thetadot = np.mean(best_vels[1:30], axis=0)
         # thetadot = best_vels[1]
         print("thetadot_cem", thetadot)
 

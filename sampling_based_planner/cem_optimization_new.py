@@ -167,10 +167,16 @@ class cem_optimization():
 		# jax.debug.print("eef_rot has NaNs: {}", jnp.any(jnp.isnan(eef_rot)))
 
 		jax.debug.print("thetadot has NaNs: {}", jnp.any(jnp.isnan(thetadot)))
+
+		jax.debug.print("theta has NaNs: {}", jnp.any(jnp.isnan(theta)))
+
+		jax.debug.print("eef_pos has NaNs: {}", jnp.any(jnp.isnan(eef_pos)))
+
+
 		
 		cost_batch, cost_g_batch, cost_r_batch, cost_c_batch = self.compute_cost_batch(thetadot, eef_pos, eef_rot, collision, target_pos, target_rot)
 
-		jax.debug.print("cost_batch has NaNs: {}", jnp.any(jnp.isnan(cost_batch)))
+		#jax.debug.print("cost_batch has NaNs: {}", jnp.any(jnp.isnan(cost_batch)))
 
 		xi_ellite, idx_ellite, cost_ellite = self.compute_ellite_samples(cost_batch, xi_samples)
 		xi_mean, xi_cov = self.compute_mean_cov(cost_ellite, xi_mean_prev, xi_cov_prev, xi_ellite)

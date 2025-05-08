@@ -101,9 +101,10 @@ with viewer.launch_passive(model, data) as viewer_:
         cost = np.round(cost, 2)
         print(f'Step Time: {"%.0f"%((time.time() - start_time)*1000)}ms | Cost g: {"%.2f"%(float(cost_g))} | Cost r: {"%.2f"%(float(cost_r))} | Cost c: {"%.2f"%(float(best_cost_c))} | Cost: {cost}')
         print(f'eef_quat: {data.xquat[cem.hande_id]}')
+        print(f'target: {target}')
         viewer_.sync()
 
-        if cost_g<0.01 and cost_r<0.3:
+        if cost_g<0.04 and cost_r<0.3:
             if target == "target_0":
                 target = "target_1"
             elif target == "target_1":

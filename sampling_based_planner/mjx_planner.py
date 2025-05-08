@@ -106,8 +106,8 @@ class cem_planner():
 		self.mjx_data = jax.jit(mjx.forward)(self.mjx_model, self.mjx_data)
 		self.jit_step = jax.jit(mjx.step)
 
-		# self.obst_ids = np.array([self.model.body(name= f'obstacle_{i}').id for i in range(2)])
-		self.obst_0_pos = self.mjx_data.xpos[self.model.body(name= 'obstacle_0').id]
+		## self.obst_ids = np.array([self.model.body(name= f'obstacle_{i}').id for i in range(2)])
+		# self.obst_0_pos = self.mjx_data.xpos[self.model.body(name= 'obstacle_0').id]
 		# self.obst_1_pos = self.mjx_data.xpos[self.model.body(name= 'obstacle_1').id]
 
 		self.geom_ids = np.array([mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, f'robot_{i}') for i in range(10)])
@@ -136,19 +136,7 @@ class cem_planner():
 			f'\n Time per trajectory: {self.t_fin}',
 		)
 
-		
-	def quaternion_multiply(self, q1, q2):
-		"""Multiply two quaternions q1 * q2"""
-		w1, x1, y1, z1 = q1
-		w2, x2, y2, z2 = q2
-		
-		w = w2 * w1 - x2 * x1 - y2 * y1 - z2 * z1
-		x = w2 * x1 + x2 * w1 + y2 * z1 - z2 * y1
-		y = w2 * y1 - x2 * z1 + y2 * w1 + z2 * x1
-		z = w2 * z1 + x2 * y1 - y2 * x1 + z2 * w1
-		
-		return jnp.array([w, x, y, z])
-		
+
   
 	def get_A_traj(self):
 		A_theta = np.kron(np.identity(self.num_dof), self.P )

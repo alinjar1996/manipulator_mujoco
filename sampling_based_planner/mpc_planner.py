@@ -16,7 +16,7 @@ cem =  cem_planner(
     num_batch=800, 
     num_steps=8, 
     maxiter_cem=1,
-    w_pos=5,
+    w_pos=20,
     w_rot=1.5,
     w_col=10,
     num_elite=0.05,
@@ -100,6 +100,7 @@ with viewer.launch_passive(model, data) as viewer_:
         cost_r = quaternion_distance(data.xquat[cem.hande_id], target_rot)  
         cost = np.round(cost, 2)
         print(f'Step Time: {"%.0f"%((time.time() - start_time)*1000)}ms | Cost g: {"%.2f"%(float(cost_g))} | Cost r: {"%.2f"%(float(cost_r))} | Cost c: {"%.2f"%(float(best_cost_c))} | Cost: {cost}')
+        print(f'eef_quat: {data.xquat[cem.hande_id]}')
         viewer_.sync()
 
         if cost_g<0.01 and cost_r<0.3:

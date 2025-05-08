@@ -25,7 +25,6 @@ results = run_cem_planner(
     
     # Visualization
     cam_distance=4,  # View 
-    
     # Convergence thresholds
     position_threshold=0.04,  # Stricter position convergence Better for more complex tasks
     rotation_threshold=0.1,   # Stricter rotation convergence Better for more complex tasks

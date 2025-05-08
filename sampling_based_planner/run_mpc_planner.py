@@ -1,16 +1,9 @@
-# Example 1: Basic usage
+
 from mpc_planner import run_cem_planner
 
-## Run with default parameters
-#results = run_cem_planner()
 
 
-# Example 2: Command line usage
-# Run this from terminal:
-# python3 mpc_planner.py --num_batch 2000 --w_pos 30.0 --w_rot 5.0 --save_data
-
-
-# Example 3: Customized parameters
+#Customized parameters
 results = run_cem_planner(
     # CEM parameters
     num_dof=6,
@@ -44,20 +37,3 @@ results = run_cem_planner(
 )
 
 
-# # Example 4: Running a quick test with fewer samples
-# test_results = run_cem_planner(
-#     num_batch=500,    # Fewer samples for faster computation
-#     num_steps=12,     # Shorter horizon
-#     maxiter_cem=1,    # Single iteration
-#     position_threshold=0.06,  # Looser thresholds for testing
-#     rotation_threshold=0.4,
-#     save_data=False   # Don't save data during testing
-# )
-
-
-# # Example 5: Creating a custom target sequence with specific targets
-# custom_results = run_cem_planner(
-#     target_names=["target_0", "home", "target_1", "home"],
-#     position_threshold=0.05,
-#     rotation_threshold=0.25
-# )

@@ -1,23 +1,12 @@
 <mujoco>
 
-    <!-- <body name="target" pos="-0.3 0 1" quat="0 0.70711 0.70711 0">
-        <joint type="free" damping="0.007" name="free_joint_0" group="1"/>
-        <geom name="target" pos="0 0 0" rgba="0 0.6 0 1" size="0.01 0.01 0.01" type="box" margin="0"/>
-    </body> -->
 
-    <!-- <body name="target" pos="-0.3 0 1" quat="0 0.70711 0.70711 0">
-        <geom name="target" pos="0 0 0" rgba="0 0.6 0 1" size="0.01 0.01 0.01" type="box" margin="0"/>
-        <site name="frame_x" size="0.005" type="box" fromto="0 0 0  0.1 0 0" rgba="1 0 0 1" group="1"/>
-        <site name="frame_y" size="0.005" type="box" fromto="0 0 0  0 0.1 0" rgba="0 1 0 1" group="1"/> 
-        <site name="frame_z" size="0.005" type="box" fromto="0 0 0  0 0 0.1" rgba="0 0 1 1" group="1"/>
-    </body> -->
-
-    <body name="target_0" pos="-0.15 -0.05 0.5" quat="0 0.70711 0.70711 0">
+    <body name="target_0" pos="-0.3 -0.3 0.5" quat="0.0 1.0 0.0 0.0">
         <joint type="free" damping="0.007" name="free_joint_0" group="1"/>
         <geom name="target_0" pos="0 0 0" rgba="0 0.6 0 1" size="0.02 0.02 0.02" type="box"/>
     </body>
 
-    <body name="target_1" pos="-0.05 0.2 0.44" quat="0 0.70711 0.70711 0">
+    <body name="target_1" pos="-0.05 0.2 0.5" quat="0.0 1.0 0.0 0.0">
         <geom name="target_1" pos="0 0 0" rgba="0.6 0.6 0.6 1" size="0.02 0.02 0.02" type="box" />
     </body>
 

@@ -13,11 +13,11 @@ from quat_math import rotation_quaternion, quaternion_multiply, quaternion_dista
 start_time = time.time()
 cem =  cem_planner(
     num_dof=6, 
-    num_batch=800, 
+    num_batch=1000, 
     num_steps=8, 
     maxiter_cem=1,
-    w_pos=20,
-    w_rot=1.5,
+    w_pos=20.0,
+    w_rot=3.0,
     w_col=10,
     num_elite=0.05,
     timestep=0.05

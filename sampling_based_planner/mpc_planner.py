@@ -9,129 +9,308 @@ import os
 from mujoco import viewer
 import matplotlib.pyplot as plt
 from quat_math import rotation_quaternion, quaternion_multiply, quaternion_distance
+import argparse
 
-start_time = time.time()
-cem =  cem_planner(
-    num_dof=6, 
-    num_batch=1000, 
-    num_steps=16, 
+def run_cem_planner(
+    # CEM planner parameters
+    num_dof=6,
+    num_batch=1000,
+    num_steps=16,
     maxiter_cem=1,
     w_pos=20.0,
     w_rot=3.0,
-    w_col=10,
+    w_col=10.0,
     num_elite=0.05,
-    timestep=0.05
+    timestep=0.05,
+    # Robot initial configuration
+    initial_qpos=None,
+    # Target configuration
+    target_names=None,
+    # Visualization options
+    show_viewer=True,
+    cam_distance=4,
+    show_contact_points=True,
+    # Convergence criteria
+    position_threshold=0.05,
+    rotation_threshold=0.3,
+    # Save data
+    save_data=False,
+    data_dir='data',
+    # Motion control
+    stop_at_final_target=True
+):
+    """
+    Run CEM planner with configurable parameters
+    
+    Parameters:
+    -----------
+    num_dof : int
+        Number of degrees of freedom for the robot
+    num_batch : int
+        Number of samples in each CEM iteration
+    num_steps : int
+        Number of steps in the planning horizon
+    maxiter_cem : int
+        Maximum number of CEM iterations
+    w_pos : float
+        Weight for position error in the cost function
+    w_rot : float
+        Weight for rotation error in the cost function
+    w_col : float
+        Weight for collision penalty in the cost function
+    num_elite : float
+        Fraction of samples to use as elite samples
+    timestep : float
+        Time step for simulation
+    initial_qpos : array-like or None
+        Initial joint positions, if None uses [1.5, -1.8, 1.75, -1.25, -1.6, 0]
+    target_names : list of str or None
+        Names of targets to reach in sequence, if None uses ["target_0", "target_1", "home"]
+    show_viewer : bool
+        Whether to show the MuJoCo viewer
+    cam_distance : float
+        Camera distance in the viewer
+    show_contact_points : bool
+        Whether to show contact points in the viewer
+    position_threshold : float
+        Threshold for position convergence
+    rotation_threshold : float
+        Threshold for rotation convergence
+    save_data : bool
+        Whether to save data to CSV files
+    data_dir : str
+        Directory to save data
+    stop_at_final_target : bool
+        Whether to stop at the final target or loop back to the first target
+    """
+    
+    # Create the directory for data if it doesn't exist and save_data is True
+    if save_data:
+        os.makedirs(data_dir, exist_ok=True)
+    
+    # Set default initial joint positions if not provided
+    if initial_qpos is None:
+        initial_qpos = [1.5, -1.8, 1.75, -1.25, -1.6, 0]
+    
+    # Set default target sequence if not provided
+    if target_names is None:
+        target_names = ["target_0", "target_1", "home"]
+    
+    # Initialize the CEM planner
+    start_time = time.time()
+    cem = cem_planner(
+        num_dof=num_dof, 
+        num_batch=num_batch, 
+        num_steps=num_steps, 
+        maxiter_cem=maxiter_cem,
+        w_pos=w_pos,
+        w_rot=w_rot,
+        w_col=w_col,
+        num_elite=num_elite,
+        timestep=timestep
     )
-print(f"Initialized CEM Planner: {round(time.time()-start_time, 2)}s")
+    print(f"Initialized CEM Planner: {round(time.time()-start_time, 2)}s")
 
-model = cem.model
-data = cem.data
-data.qpos[:6] = jnp.array([1.5, -1.8, 1.75, -1.25, -1.6, 0])
-mujoco.mj_forward(model, data)
+    # Get model and data
+    model = cem.model
+    data = cem.data
+    
+    # Set initial joint positions
+    data.qpos[:num_dof] = jnp.array(initial_qpos)
+    mujoco.mj_forward(model, data)
 
-xi_mean = jnp.zeros(cem.nvar)
-target_pos = model.body(name="target_0").pos
-target_rot = model.body(name="target_0").quat
+    # Initialize CEM mean
+    xi_mean = jnp.zeros(cem.nvar)
+    
+    # Get initial end-effector position and orientation
+    init_position = data.site_xpos[model.site(name="tcp").id].copy()
+    init_rotation = data.xquat[model.body(name="hande").id].copy()
 
+    # First target for test computation
+    target_pos = model.body(name=target_names[0]).pos
+    target_rot = model.body(name=target_names[0]).quat
 
-start_time = time.time()
-_ = cem.compute_cem(xi_mean, data.qpos[:6], data.qvel[:6], data.qacc[:6], target_pos, target_rot)
-print(f"Compute CEM: {round(time.time()-start_time, 2)}s")
+    # Warm-up computation
+    start_time = time.time()
+    _ = cem.compute_cem(xi_mean, data.qpos[:num_dof], data.qvel[:num_dof], data.qacc[:num_dof], target_pos, target_rot)
+    print(f"Compute CEM: {round(time.time()-start_time, 2)}s")
 
+    # Initialize variables for data collection
+    thetadot = np.array([0] * num_dof)
+    cost_g_list = []
+    cost_list = []
+    cost_r_list = []
+    cost_c_list = []
+    thetadot_list = []
+    theta_list = []
+    
+    # Current target index
+    target_idx = 0
+    current_target = target_names[target_idx]
+    
+    # Run the control loop
+    if show_viewer:
+        with viewer.launch_passive(model, data) as viewer_:
+            viewer_.cam.distance = cam_distance
+            viewer_.opt.flags[mujoco.mjtVisFlag.mjVIS_CONTACTPOINT] = show_contact_points
+            
+            while viewer_.is_running():
+                # Time the step
+                start_time = time.time()
+                
+                # Determine target position and orientation
+                if current_target != "home":
+                    target_pos = model.body(name=current_target).pos
+                    target_rot = model.body(name=current_target).quat
+                else:
+                    target_pos = init_position
+                    target_rot = init_rotation
 
-thetadot = np.array([0]*6)
+                # Special case for target_1 (moving target with end-effector)
+                if current_target == "target_1" and "target_0" in target_names:
+                    model.body(name="target_0").pos = data.site_xpos[cem.tcp_id]
+                    model.body(name="target_0").quat = data.xquat[cem.hande_id]
 
-cost_g_list = list()
-cost_list = list()
-cost_r_list = list()
-cost_c_list = list()
-thetadot_list = list()
-theta_list = list()
+                # Compute CEM control
+                cost, best_cost_g, best_cost_c, best_vels, best_traj, xi_mean = cem.compute_cem(
+                    xi_mean, data.qpos[:num_dof], data.qvel[:num_dof], 
+                    data.qacc[:num_dof], target_pos, target_rot
+                )
+                
+                # Apply the control (use average of planned velocities)
+                thetadot = np.mean(best_vels[1:num_steps-2], axis=0)
+                data.qvel[:num_dof] = thetadot
+                mujoco.mj_step(model, data)
 
-# init_position = data.xpos[model.body(name="hande").id].copy()
-init_position = data.site_xpos[model.site(name="tcp").id].copy()
-init_rotation = data.xquat[model.body(name="hande").id].copy()
+                # Calculate costs
+                cost_g = np.linalg.norm(data.site_xpos[cem.tcp_id] - target_pos)   
+                cost_r = quaternion_distance(data.xquat[cem.hande_id], target_rot)  
+                current_cost = np.round(cost, 2)
+                
+                # Print status
+                print(f'Step Time: {"%.0f"%((time.time() - start_time)*1000)}ms | Cost g: {"%.2f"%(float(cost_g))}'
+                      f' | Cost r: {"%.2f"%(float(cost_r))} | Cost c: {"%.2f"%(float(best_cost_c))} | Cost: {current_cost}')
+                print(f'eef_quat: {data.xquat[cem.hande_id]}')
+                print(f'target: {current_target}')
+                
+                # Update viewer
+                viewer_.sync()
 
-# target_positions = [
-#     [-0.3, 0.3, 0.8],
-#     [-0.2, -0.4, 1.0],
-#     [-0.3, -0.1, 0.8],
-#     init_position
-# ]
+                # Check if target is reached based on thresholds
+                if cost_g < position_threshold and cost_r < rotation_threshold:
+                    # Check if this was the last target
+                    if target_idx == len(target_names) - 1:
+                        if stop_at_final_target:
+                            print(f"Reached final target: {current_target}. Stopping motion.")
+                            # Hold position by setting velocities to zero
+                            thetadot = np.zeros(num_dof)
+                            data.qvel[:num_dof] = thetadot
+                        else:
+                            # Loop back to first target
+                            target_idx = 0
+                            current_target = target_names[target_idx]
+                            print(f"Reached final target. Looping back to first target: {current_target}")
+                    else:
+                        # Move to next target
+                        target_idx = target_idx + 1
+                        current_target = target_names[target_idx]
+                        print(f"Moving to next target: {current_target}")
+                    
+                    # If transitioning to home, save current position for reference
+                    if current_target == "home" and "target_0" in target_names:
+                        model.body(name="target_0").pos = data.site_xpos[cem.tcp_id].copy()
+                        model.body(name="target_0").quat = data.xquat[cem.hande_id].copy()
 
-# target_rotations = [
-#     rotation_quaternion(-135, np.array([1,0,0])),
-#     quaternion_multiply(rotation_quaternion(90, np.array([0,0,1])),rotation_quaternion(135, np.array([1,0,0]))),
-#     quaternion_multiply(rotation_quaternion(180, np.array([0,0,1])),rotation_quaternion(-90, np.array([0,1,0]))),
-#     init_rotation
-# ]
+                # Store data
+                cost_g_list.append(cost_g)
+                cost_r_list.append(cost_r)
+                cost_c_list.append(best_cost_c)
+                thetadot_list.append(thetadot)
+                theta_list.append(data.qpos[:num_dof].copy())
+                cost_list.append(current_cost[-1] if isinstance(current_cost, np.ndarray) else current_cost)
 
-target_idx = 0
+                # Sleep to maintain simulation speed
+                time_until_next_step = model.opt.timestep - (time.time() - start_time)
+                if time_until_next_step > 0:
+                    time.sleep(time_until_next_step)
+    else:
+        # Non-visualization mode would go here if needed
+        print("Running without visualization is not implemented yet.")
+        
+    # Save data if requested
+    if save_data:
+        np.savetxt(f'{data_dir}/costs.csv', cost_list, delimiter=",")
+        np.savetxt(f'{data_dir}/thetadot.csv', thetadot_list, delimiter=",")
+        np.savetxt(f'{data_dir}/theta.csv', theta_list, delimiter=",")
+        np.savetxt(f'{data_dir}/cost_g.csv', cost_g_list, delimiter=",")
+        np.savetxt(f'{data_dir}/cost_r.csv', cost_r_list, delimiter=",")
+        np.savetxt(f'{data_dir}/cost_c.csv', cost_c_list, delimiter=",")
+    
+    return {
+        'cost_g': cost_g_list,
+        'cost_r': cost_r_list,
+        'cost_c': cost_c_list,
+        'cost': cost_list,
+        'thetadot': thetadot_list,
+        'theta': theta_list
+    }
 
-target = "target_0"
-
-with viewer.launch_passive(model, data) as viewer_:
-    viewer_.cam.distance = 4
-    viewer_.opt.flags[mujoco.mjtVisFlag.mjVIS_CONTACTPOINT] = True
-    # viewer_.opt.sitegroup[:] = False  
-    # viewer_.opt.sitegroup[1] = True 
-
-    while viewer_.is_running():
-        start_time = time.time()
-        if target != "home":
-            target_pos = model.body(name=target).pos
-            target_rot = model.body(name=target).quat
-        else:
-            target_pos = init_position
-            target_rot = init_rotation
-
-        if target == "target_1":
-            model.body(name="target_0").pos = data.site_xpos[cem.tcp_id]
-            model.body(name="target_0").quat = data.xquat[cem.hande_id]
-
-        cost, best_cost_g, best_cost_c, best_vels, best_traj, xi_mean = cem.compute_cem(xi_mean, data.qpos[:6], data.qvel[:6], data.qacc[:6], target_pos, target_rot)
-        thetadot = np.mean(best_vels[1:16-2], axis=0)
-        # thetadot = best_vels[1]
-
-        data.qvel[:6] = thetadot
-        mujoco.mj_step(model, data)
-
-        cost_g = np.linalg.norm(data.site_xpos[cem.tcp_id] - target_pos)   
-        cost_r = quaternion_distance(data.xquat[cem.hande_id], target_rot)  
-        cost = np.round(cost, 2)
-        print(f'Step Time: {"%.0f"%((time.time() - start_time)*1000)}ms | Cost g: {"%.2f"%(float(cost_g))} | Cost r: {"%.2f"%(float(cost_r))} | Cost c: {"%.2f"%(float(best_cost_c))} | Cost: {cost}')
-        print(f'eef_quat: {data.xquat[cem.hande_id]}')
-        print(f'target: {target}')
-        viewer_.sync()
-
-        if cost_g<0.04 and cost_r<0.3:
-            if target == "target_0":
-                target = "target_1"
-            elif target == "target_1":
-                model.body(name="target_0").pos = data.site_xpos[cem.tcp_id].copy()
-                model.body(name="target_0").quat = data.xquat[cem.hande_id].copy()
-                target = "home"
-
-            # model.body(name="target").pos = target_positions[target_idx]
-            # model.body(name="target").quat = target_rotations[target_idx]
-            # if target_idx<len(target_positions)-1:
-            #     target_idx += 1
-
-
-        cost_g_list.append(cost_g)
-        cost_r_list.append(cost_r)
-        cost_c_list.append(best_cost_c)
-        thetadot_list.append(thetadot)
-        theta_list.append(data.qpos[:6].copy())
-        cost_list.append(cost[-1])
-
-        time_until_next_step = model.opt.timestep - (time.time() - start_time)
-        if time_until_next_step > 0:
-            time.sleep(time_until_next_step)  
-
-np.savetxt('data/costs.csv',cost_list, delimiter=",")
-np.savetxt('data/thetadot.csv',thetadot_list, delimiter=",")
-np.savetxt('data/theta.csv',theta_list, delimiter=",")
-np.savetxt('data/cost_g.csv',cost_g_list, delimiter=",")
-np.savetxt('data/cost_r.csv',cost_r_list, delimiter=",")
-np.savetxt('data/cost_c.csv',cost_c_list, delimiter=",")
+if __name__ == "__main__":
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Run CEM planner with configurable parameters')
+    
+    # CEM planner parameters
+    parser.add_argument('--num_dof', type=int, default=6, help='Number of degrees of freedom')
+    parser.add_argument('--num_batch', type=int, default=1000, help='Number of samples in each CEM iteration')
+    parser.add_argument('--num_steps', type=int, default=16, help='Number of steps in the planning horizon')
+    parser.add_argument('--maxiter_cem', type=int, default=1, help='Maximum number of CEM iterations')
+    parser.add_argument('--w_pos', type=float, default=20.0, help='Weight for position error')
+    parser.add_argument('--w_rot', type=float, default=3.0, help='Weight for rotation error')
+    parser.add_argument('--w_col', type=float, default=10.0, help='Weight for collision penalty')
+    parser.add_argument('--num_elite', type=float, default=0.05, help='Fraction of samples to use as elite samples')
+    parser.add_argument('--timestep', type=float, default=0.05, help='Time step for simulation')
+    
+    # Initial configuration
+    parser.add_argument('--initial_qpos', type=float, nargs='+', default=None, help='Initial joint positions')
+    
+    # Visualization options
+    parser.add_argument('--no_viewer', action='store_true', help='Disable MuJoCo viewer')
+    parser.add_argument('--cam_distance', type=float, default=4, help='Camera distance in the viewer')
+    parser.add_argument('--no_contact_points', action='store_true', help='Disable contact point visualization')
+    
+    # Convergence criteria
+    parser.add_argument('--position_threshold', type=float, default=0.04, help='Threshold for position convergence')
+    parser.add_argument('--rotation_threshold', type=float, default=0.3, help='Threshold for rotation convergence')
+    
+    # Target sequence
+    parser.add_argument('--targets', type=str, nargs='+', default=None, help='Target names in sequence')
+    
+    # Save data
+    parser.add_argument('--save_data', action='store_true', help='Save data to CSV files')
+    parser.add_argument('--data_dir', type=str, default='data', help='Directory to save data')
+    parser.add_argument('--continue_after_final', action='store_true', help='Continue movement after reaching final target (loop)')
+    
+    args = parser.parse_args()
+    
+    # Run CEM planner with parsed arguments
+    run_cem_planner(
+        num_dof=args.num_dof,
+        num_batch=args.num_batch,
+        num_steps=args.num_steps,
+        maxiter_cem=args.maxiter_cem,
+        w_pos=args.w_pos,
+        w_rot=args.w_rot,
+        w_col=args.w_col,
+        num_elite=args.num_elite,
+        timestep=args.timestep,
+        initial_qpos=args.initial_qpos,
+        target_names=args.targets,
+        show_viewer=not args.no_viewer,
+        cam_distance=args.cam_distance,
+        show_contact_points=not args.no_contact_points,
+        position_threshold=args.position_threshold,
+        rotation_threshold=args.rotation_threshold,
+        save_data=args.save_data,
+        data_dir=args.data_dir,
+        stop_at_final_target=not args.continue_after_final
+    )

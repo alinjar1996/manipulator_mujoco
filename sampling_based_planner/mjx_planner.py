@@ -105,10 +105,9 @@ class cem_planner():
 		self.mjx_data = mjx.put_data(self.model, self.data)
 		self.mjx_data = jax.jit(mjx.forward)(self.mjx_model, self.mjx_data)
 		self.jit_step = jax.jit(mjx.step)
+        
+		# Defining Obstacle position here is not needed as that is taken from environment
 
-		## self.obst_ids = np.array([self.model.body(name= f'obstacle_{i}').id for i in range(2)])
-		# self.obst_0_pos = self.mjx_data.xpos[self.model.body(name= 'obstacle_0').id]
-		# self.obst_1_pos = self.mjx_data.xpos[self.model.body(name= 'obstacle_1').id]
 
 		self.geom_ids = np.array([mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, f'robot_{i}') for i in range(10)])
 		# self.mask = jnp.sum(jnp.isin(self.mjx_data.contact.geom, self.geom_ids), axis=1)
@@ -272,7 +271,9 @@ class cem_planner():
 		y = 0.005
 		collision = collision.T
 		g = -collision[:, 1:]+collision[:, :-1]-y*collision[:, :-1]
-		cost_c = jnp.sum(jnp.max(g.reshape(g.shape[0], g.shape[1], 1), axis=-1, initial=0)) + jnp.sum(jnp.where(collision<0, True, False))
+		cost_c = jnp.sum(jnp.max(g.reshape(g.shape[0], g.shape[1], 1), axis=-1, initial=0)) + jnp.sum(collision < 0)
+		
+		#jnp.sum(jnp.where(collision<0, True, False)) is same as  jnp.sum(collision < 0)
 
 		cost = self.cost_weights['w_pos']*cost_g + self.cost_weights['w_rot']*cost_r + self.cost_weights['w_col']*cost_c
 		return cost, cost_g_, cost_c

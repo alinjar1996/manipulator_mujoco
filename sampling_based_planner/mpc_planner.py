@@ -13,31 +13,31 @@ import argparse
 
 def run_cem_planner(
     # CEM planner parameters
-    num_dof=6,
-    num_batch=1000,
-    num_steps=16,
-    maxiter_cem=1,
-    w_pos=20.0,
-    w_rot=3.0,
-    w_col=10.0,
-    num_elite=0.05,
-    timestep=0.05,
+    num_dof=None,
+    num_batch=None,
+    num_steps=None,
+    maxiter_cem=None,
+    w_pos=None,
+    w_rot=None,
+    w_col=None,
+    num_elite=None,
+    timestep=None,
     # Robot initial configuration
     initial_qpos=None,
     # Target configuration
     target_names=None,
     # Visualization options
-    show_viewer=True,
-    cam_distance=4,
-    show_contact_points=True,
+    show_viewer=None,
+    cam_distance=None,
+    show_contact_points=None,
     # Convergence criteria
-    position_threshold=0.05,
-    rotation_threshold=0.3,
+    position_threshold=None,
+    rotation_threshold=None,
     # Save data
-    save_data=False,
-    data_dir='data',
+    save_data=None,
+    data_dir=None,
     # Motion control
-    stop_at_final_target=True
+    stop_at_final_target=None
 ):
     """
     Run CEM planner with configurable parameters
@@ -87,14 +87,6 @@ def run_cem_planner(
     # Create the directory for data if it doesn't exist and save_data is True
     if save_data:
         os.makedirs(data_dir, exist_ok=True)
-    
-    # Set default initial joint positions if not provided
-    if initial_qpos is None:
-        initial_qpos = [1.5, -1.8, 1.75, -1.25, -1.6, 0]
-    
-    # Set default target sequence if not provided
-    if target_names is None:
-        target_names = ["target_0", "target_1", "home"]
     
     # Initialize the CEM planner
     start_time = time.time()

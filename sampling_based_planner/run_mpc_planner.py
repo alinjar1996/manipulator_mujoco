@@ -17,6 +17,10 @@ results = run_cem_planner(
     w_rot=3.0,       # weight on rotation error
     w_col=80.0,      # weight on collision avoidance
     
+    #Shower parameters
+    show_viewer=True,
+    show_contact_points=True,
+    
     # Initial configuration
     initial_qpos=[1.5, -1.8, 1.75, -1.25, -1.6, 0],
     
@@ -33,7 +37,9 @@ results = run_cem_planner(
     # Save data
     save_data=True,
     data_dir='custom_data',
-    stop_at_final_target=True #Stop at final target
+
+    #Stop at final target
+    stop_at_final_target=True 
 )
 
 

@@ -268,15 +268,24 @@ class cem_planner():
 		cost_r_ = 2 * jnp.arccos(dot_product)
 		cost_r = cost_r_[-1] + jnp.sum(cost_r_[:-1])*1
 
+
 		y = 0.005
 		collision = collision.T
+
+		#jax.debug.print("collision :{}", collision.shape)
+
 		g = -collision[:, 1:]+collision[:, :-1]-y*collision[:, :-1]
+
+		#jax.debug.print("g :{}", g.shape)
+
 		cost_c = jnp.sum(jnp.max(g.reshape(g.shape[0], g.shape[1], 1), axis=-1, initial=0)) + jnp.sum(collision < 0)
+
+		#jax.debug.print("cost_c :{}", cost_c)
 		
 		#jnp.sum(jnp.where(collision<0, True, False)) is same as  jnp.sum(collision < 0)
 
 		cost = self.cost_weights['w_pos']*cost_g + self.cost_weights['w_rot']*cost_r + self.cost_weights['w_col']*cost_c
-		return cost, cost_g_, cost_c
+		return cost, cost_g, cost_r, cost_c
 	
 	@partial(jax.jit, static_argnums=(0, ))
 	def compute_ellite_samples(self, cost_batch, xi_filtered):
@@ -332,13 +341,14 @@ class cem_planner():
 		# jax.debug.print("target_pos has NaNs: {}", jnp.any(jnp.isnan(target_pos)))
 		# jax.debug.print("target_rot has NaNs: {}", jnp.any(jnp.isnan(target_rot)))
 
-		cost_batch, cost_g_batch, cost_c_batch = self.compute_cost_batch(thetadot, eef_pos, eef_rot, collision, target_pos, target_rot)
+		cost_batch, cost_g_batch, cost_r_batch, cost_c_batch = self.compute_cost_batch(thetadot, eef_pos, eef_rot, collision, target_pos, target_rot)
 
 		xi_ellite, idx_ellite, cost_ellite = self.compute_ellite_samples(cost_batch, xi_samples)
 		xi_mean, xi_cov = self.compute_mean_cov(cost_ellite, xi_mean_prev, xi_cov_prev, xi_ellite)
 
 		carry = (init_pos, init_vel, target_pos, target_rot, xi_mean, xi_cov, key, state_term)
-		return carry, (cost_batch, cost_g_batch, cost_c_batch, thetadot, theta)
+
+		return carry, (cost_batch, cost_g_batch, cost_r_batch, cost_c_batch, thetadot, theta)
 
 	@partial(jax.jit, static_argnums=(0,))
 	def compute_cem(
@@ -369,17 +379,21 @@ class cem_planner():
 		carry = (init_pos, init_vel, target_pos, target_rot, xi_mean, xi_cov, key, state_term)
 		scan_over = jnp.array([0]*self.maxiter_cem)
 		carry, out = jax.lax.scan(self.cem_iter, carry, scan_over, length=self.maxiter_cem)
-		cost_batch, cost_g_batch, cost_c_batch, thetadot, theta = out
+		cost_batch, cost_g_batch, cost_r_batch, cost_c_batch, thetadot, theta = out
 
 		idx_min = jnp.argmin(cost_batch[-1])
 		cost = jnp.min(cost_batch, axis=1)
 		best_vels = thetadot[-1][idx_min].reshape((self.num_dof, self.num)).T
 		best_traj = theta[-1][idx_min].reshape((self.num_dof, self.num)).T
+
 		best_cost_g = cost_g_batch[-1][idx_min]
+		best_cost_r = cost_r_batch[-1][idx_min]
 		best_cost_c = cost_c_batch[-1][idx_min]
+
+		#jax.debug.print("best_cost_g: {}", best_cost_g)
 		xi_mean = carry[4]
 
-		return cost, best_cost_g, best_cost_c, best_vels, best_traj, xi_mean
+		return cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean
 	
 def main():
 	num_dof = 6
@@ -392,8 +406,8 @@ def main():
 
 	start_time_comp_cem = time.time()
 	xi_mean = jnp.zeros(opt_class.nvar)
-	#cost, best_cost_g, best_vels, best_traj, xi_mean = opt_class.compute_cem(xi_mean)
-	cost, best_cost_g, best_cost_c, best_vels, best_traj, xi_mean = opt_class.compute_cem(xi_mean)
+	
+	cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean = opt_class.compute_cem(xi_mean)
 
 	print(f"Total time: {round(time.time()-start_time, 2)}s")
 	print(f"Compute CEM time: {round(time.time()-start_time_comp_cem, 2)}s")

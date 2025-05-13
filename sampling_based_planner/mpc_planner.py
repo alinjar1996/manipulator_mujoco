@@ -164,7 +164,7 @@ def run_cem_planner(
                     model.body(name="target_0").quat = data.xquat[cem.hande_id]
 
                 # Compute CEM control
-                cost, best_cost_g, best_cost_c, best_vels, best_traj, xi_mean = cem.compute_cem(
+                cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean = cem.compute_cem(
                     xi_mean, data.qpos[:num_dof], data.qvel[:num_dof], 
                     data.qacc[:num_dof], target_pos, target_rot
                 )
@@ -175,13 +175,14 @@ def run_cem_planner(
                 mujoco.mj_step(model, data)
 
                 # Calculate costs
-                cost_g = np.linalg.norm(data.site_xpos[cem.tcp_id] - target_pos)   
-                cost_r = quaternion_distance(data.xquat[cem.hande_id], target_rot)  
+                current_cost_g = np.linalg.norm(data.site_xpos[cem.tcp_id] - target_pos)   
+                current_cost_r = quaternion_distance(data.xquat[cem.hande_id], target_rot)  
                 current_cost = np.round(cost, 2)
                 
                 # Print status
-                print(f'Step Time: {"%.0f"%((time.time() - start_time)*1000)}ms | Cost g: {"%.2f"%(float(cost_g))}'
-                      f' | Cost r: {"%.2f"%(float(cost_r))} | Cost c: {"%.2f"%(float(best_cost_c))} | Cost: {current_cost}')
+
+                print(f'Step Time: {"%.0f"%((time.time() - start_time)*1000)}ms | Cost g: {"%.2f"%(float(current_cost_g))}'
+                      f' | Cost r: {"%.2f"%(float(current_cost_r))} | Cost c: {"%.2f"%(float(best_cost_c))} | Cost: {current_cost}')
                 print(f'eef_quat: {data.xquat[cem.hande_id]}')
                 print(f'target: {current_target}')
                 
@@ -189,7 +190,7 @@ def run_cem_planner(
                 viewer_.sync()
 
                 # Check if target is reached based on thresholds
-                if cost_g < position_threshold and cost_r < rotation_threshold:
+                if current_cost_g < position_threshold and current_cost_r < rotation_threshold:
                     # Check if this was the last target
                     if target_idx == len(target_names) - 1:
                         if stop_at_final_target:
@@ -214,8 +215,8 @@ def run_cem_planner(
                         model.body(name="target_0").quat = data.xquat[cem.hande_id].copy()
 
                 # Store data
-                cost_g_list.append(cost_g)
-                cost_r_list.append(cost_r)
+                cost_g_list.append(best_cost_g)
+                cost_r_list.append(best_cost_r)
                 cost_c_list.append(best_cost_c)
                 thetadot_list.append(thetadot)
                 theta_list.append(data.qpos[:num_dof].copy())

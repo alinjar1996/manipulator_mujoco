@@ -317,7 +317,7 @@ class cem_planner():
 		mean_control = (1-self.alpha_mean)*mean_control_prev + self.alpha_mean*(jnp.sum( (xi_ellite * w[:,jnp.newaxis]) , axis= 0)/ sum_w)
 		diffs = (xi_ellite - mean_control)
 		prod_result = self.vec_product(diffs, w)
-		cov_control = (1-self.alpha_cov)*cov_control_prev + self.alpha_cov*(jnp.sum( prod_result , axis = 0)/jnp.sum(w, axis = 0)) + 0.0001*jnp.identity(self.nvar)
+		cov_control = (1-self.alpha_cov)*cov_control_prev + self.alpha_cov*(jnp.sum( prod_result , axis = 0)/sum_w) + 0.01*jnp.identity(self.nvar)
 		return mean_control, cov_control
 	
 	@partial(jax.jit, static_argnums=(0,))
@@ -330,11 +330,24 @@ class cem_planner():
 		xi_samples, key = self.compute_xi_samples(key, xi_mean, xi_cov)
 		xi_filtered = self.compute_projection_filter(xi_samples, state_term)
 
+        
+		#jax.debug.print("xi_samples has NaNs: {}", jnp.any(jnp.isnan(xi_samples)))
+		#jax.debug.print("xi_filtered has NaNs: {}", jnp.any(jnp.isnan(xi_filtered)))
+
 		thetadot = jnp.dot(self.A_thetadot, xi_filtered.T).T
+
+		# jax.debug.print("thetadot max:{}", jnp.max(thetadot))
+		# jax.debug.print("thetadot min:{}", jnp.min(thetadot))
 
 
 		theta, eef_pos, eef_rot, collision = self.compute_rollout_batch(thetadot, init_pos, init_vel)
 
+		if jnp.any(jnp.isnan(theta)) is True:
+			jax.debug.print("xi_filtered:{}", jnp.max(xi_filtered))
+			jax.debug.print("xi_filtered:{}", jnp.min(xi_filtered))
+
+
+		# jax.debug.print("thetadot has NaNs: {}", jnp.any(jnp.isnan(thetadot)))
 		# jax.debug.print("theta has NaNs: {}", jnp.any(jnp.isnan(theta)))
 		# jax.debug.print("eef_pos has NaNs: {}", jnp.any(jnp.isnan(eef_pos)))
 		# jax.debug.print("eef_rot has NaNs: {}", jnp.any(jnp.isnan(eef_rot)))
@@ -406,7 +419,7 @@ def main():
 	start_time_comp_cem = time.time()
 	xi_mean = jnp.zeros(opt_class.nvar)
 	
-	cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean = opt_class.compute_cem(xi_mean)
+	cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean = opt_class.compute_cem(xi_mean, xi_cov = 10*jnp.eye(opt_class.nvar))
 
 	print(f"Total time: {round(time.time()-start_time, 2)}s")
 	print(f"Compute CEM time: {round(time.time()-start_time_comp_cem, 2)}s")

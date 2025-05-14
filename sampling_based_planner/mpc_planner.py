@@ -11,6 +11,43 @@ import matplotlib.pyplot as plt
 from quat_math import rotation_quaternion, quaternion_multiply, quaternion_distance
 import argparse
 
+def check_psd(matrix, name="Matrix", tol=1e-8):
+    # Check symmetry
+    is_symmetric = jnp.allclose(matrix, matrix.T, atol=tol)
+    # print(f"{name} is symmetric: {is_symmetric}")
+
+    # Compute eigenvalues
+    eigvals = jnp.linalg.eigvalsh(matrix)  # Use eigvalsh for symmetric matrices
+    min_eig = jnp.min(eigvals)
+    # print(f"{name} min eigenvalue: {min_eig:.3e}")
+    # print(f"{name} all eigenvalues >= {-tol}: {jnp.all(eigvals >= -tol)}")
+
+    # Final result
+    is_psd = is_symmetric and jnp.all(eigvals >= -tol)
+    # print(f"{name} is PSD: {is_psd}")
+    return is_psd
+
+def repair_psd(matrix, min_eigval=1e-6, name="Matrix"):
+    # Compute symmetric version (to avoid asymmetry due to numerical issues)
+    sym_matrix = 0.5 * (matrix + matrix.T)
+    
+    # Eigen-decomposition
+    eigvals, eigvecs = jnp.linalg.eigh(sym_matrix)
+    
+    # Clamp eigenvalues
+    eigvals_clamped = jnp.clip(eigvals, min_eigval, jnp.inf)
+    
+    # Reconstruct repaired matrix
+    matrix_psd = eigvecs @ jnp.diag(eigvals_clamped) @ eigvecs.T
+
+    # Optional: Print diagnostics
+    # print(f"{name} repair:")
+    # print(f"  Original min eigenvalue: {jnp.min(eigvals):.3e}")
+    # print(f"  Clamped eigenvalues to be ≥ {min_eigval}")
+    # print(f"  Repaired min eigenvalue: {jnp.min(eigvals_clamped):.3e}")
+
+    return matrix_psd
+
 def run_cem_planner(
     # CEM planner parameters
     num_dof=None,
@@ -114,6 +151,7 @@ def run_cem_planner(
     # Initialize CEM mean
     xi_mean = jnp.zeros(cem.nvar)
     xi_cov = 10.0*jnp.identity(cem.nvar)
+    xi_cov_max = 10.0*jnp.identity(cem.nvar)
 
     print(f"xi_cov_shape: {xi_cov.shape}")
     
@@ -166,37 +204,32 @@ def run_cem_planner(
                     model.body(name="target_0").pos = data.site_xpos[cem.tcp_id]
                     model.body(name="target_0").quat = data.xquat[cem.hande_id]
                 
-                
-                
-
-                if jnp.isnan(xi_cov).any():
-                    print("xi_cov_before contains NaNs!")
-
-
-                print(f"xi_cov_before_planner: {jnp.max(xi_cov)}")
-                
+                    
+                #else:
+                    #print("xi_cov is PSD!")
+           
+                #print(f"xi_cov_before_planner: {jnp.max(xi_cov)}")
+                #xi_cov = 1000.0*jnp.identity(cem.nvar)
                 # Compute CEM control
                 cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean, xi_cov = cem.compute_cem(
                     xi_mean, xi_cov, data.qpos[:num_dof], data.qvel[:num_dof], 
                     data.qacc[:num_dof], target_pos, target_rot
                 )
-              
-                # Clip the diagonal elements between 0.01 and 50
-                # xi_diagonal = jnp.clip(jnp.diag(xi_cov), 0.01, 50)
-                # xi_cov = xi_cov.at[jnp.diag_indices_from(xi_cov)].set(xi_diagonal)
 
-                #xi_cov = jnp.clip(xi_cov, -15, 15)
+                # is_valid = check_psd(xi_cov, name="xi_cov") 
 
-           
-                if jnp.isnan(xi_cov).any():
-                    print("xi_cov_after contains NaNs!")
-          
-                    
+                # if not is_valid:
+                #     print("xi_cov is not PSD!")
+                #     #xi_cov = repair_psd(xi_cov, name="xi_cov")
+                #     xi_cov = jnp.max(xi_cov)*jnp.identity(cem.nvar)
                 
-                print(f"xi_cov_after_planner: {jnp.max(xi_cov)}")
+                #xi_cov = 10*jnp.identity(cem.nvar)
+                # min_diag = jnp.min(jnp.diag(xi_cov))
+                
+                # print(f"minimum diagonal: {min_diag}")
                 
                 # Apply the control (use average of planned velocities)
-                thetadot = np.mean(best_vels[1:num_steps], axis=0)
+                thetadot = np.mean(best_vels[1:num_steps-2], axis=0)
                 data.qvel[:num_dof] = thetadot
                 mujoco.mj_step(model, data)
 
@@ -208,7 +241,7 @@ def run_cem_planner(
                 # Print status
 
                 print(f'Step Time: {"%.0f"%((time.time() - start_time)*1000)}ms | Current Cost g: {"%.2f"%(float(current_cost_g))}'
-                      f' | Current Cost r: {"%.2f"%(float(current_cost_r))} | Current Cost c: {"%.2f"%(float(best_cost_c))} | Current Cost: {current_cost}')
+                      f' | Current Cost r: {"%.2f"%(float(current_cost_r))} | Cost c: {"%.2f"%(float(best_cost_c))} | Current Cost: {current_cost}')
                 print(f'eef_quat: {data.xquat[cem.hande_id]}')
                 print(f'target: {current_target}')
                 

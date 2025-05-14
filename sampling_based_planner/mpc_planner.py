@@ -113,6 +113,7 @@ def run_cem_planner(
 
     # Initialize CEM mean
     xi_mean = jnp.zeros(cem.nvar)
+    xi_cov = 1*jnp.identity(cem.nvar)
     
     # Get initial end-effector position and orientation
     init_position = data.site_xpos[model.site(name="tcp").id].copy()
@@ -124,7 +125,7 @@ def run_cem_planner(
 
     # Warm-up computation
     start_time = time.time()
-    _ = cem.compute_cem(xi_mean, data.qpos[:num_dof], data.qvel[:num_dof], data.qacc[:num_dof], target_pos, target_rot)
+    _ = cem.compute_cem(xi_mean, xi_cov, data.qpos[:num_dof], data.qvel[:num_dof], data.qacc[:num_dof], target_pos, target_rot)
     print(f"Compute CEM: {round(time.time()-start_time, 2)}s")
 
     # Initialize variables for data collection
@@ -164,13 +165,13 @@ def run_cem_planner(
                     model.body(name="target_0").quat = data.xquat[cem.hande_id]
 
                 # Compute CEM control
-                cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean = cem.compute_cem(
-                    xi_mean, data.qpos[:num_dof], data.qvel[:num_dof], 
+                cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean, xi_cov = cem.compute_cem(
+                    xi_mean, xi_cov, data.qpos[:num_dof], data.qvel[:num_dof], 
                     data.qacc[:num_dof], target_pos, target_rot
                 )
                 
                 # Apply the control (use average of planned velocities)
-                thetadot = np.mean(best_vels[1:num_steps-2], axis=0)
+                thetadot = np.mean(best_vels[1:num_steps], axis=0)
                 data.qvel[:num_dof] = thetadot
                 mujoco.mj_step(model, data)
 
@@ -181,8 +182,8 @@ def run_cem_planner(
                 
                 # Print status
 
-                print(f'Step Time: {"%.0f"%((time.time() - start_time)*1000)}ms | Cost g: {"%.2f"%(float(current_cost_g))}'
-                      f' | Cost r: {"%.2f"%(float(current_cost_r))} | Cost c: {"%.2f"%(float(best_cost_c))} | Cost: {current_cost}')
+                print(f'Step Time: {"%.0f"%((time.time() - start_time)*1000)}ms | Current Cost g: {"%.2f"%(float(current_cost_g))}'
+                      f' | Current Cost r: {"%.2f"%(float(current_cost_r))} | Current Cost c: {"%.2f"%(float(best_cost_c))} | Current Cost: {current_cost}')
                 print(f'eef_quat: {data.xquat[cem.hande_id]}')
                 print(f'target: {current_target}')
                 

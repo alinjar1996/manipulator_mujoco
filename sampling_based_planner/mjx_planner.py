@@ -352,7 +352,7 @@ class cem_planner():
 
 	@partial(jax.jit, static_argnums=(0,))
 	def compute_cem(
-		self, xi_mean, 
+		self, xi_mean, xi_cov,
 		init_pos=jnp.array([1.5, -1.8, 1.75, -1.25, -1.6, 0]), 
 		init_vel=jnp.zeros(6), 
 		init_acc=jnp.zeros(6),
@@ -371,8 +371,6 @@ class cem_planner():
 
 		state_term = jnp.hstack((theta_init, thetadot_init, thetaddot_init, thetadot_fin, thetaddot_fin))
 		state_term = jnp.asarray(state_term)
-		
-		xi_cov = 10*jnp.identity(self.nvar)
   
 		key, subkey = jax.random.split(self.key)
 
@@ -392,8 +390,9 @@ class cem_planner():
 
 		#jax.debug.print("best_cost_g: {}", best_cost_g)
 		xi_mean = carry[4]
+		xi_cov = carry[5]
 
-		return cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean
+		return cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean, xi_cov
 	
 def main():
 	num_dof = 6
@@ -401,7 +400,7 @@ def main():
 
 	start_time = time.time()
 	#opt_class = cem_planner(num_dof, num_batch, w_pos=3, num_elite=0.1, maxiter_cem=30)	
-	opt_class = cem_planner(num_dof=6, num_batch=2000, num_steps=50, maxiter_cem=30,
+	opt_class = cem_planner(num_dof=6, num_batch=1000, num_steps=50, maxiter_cem=1,
                            w_pos=1, w_rot=0.5, w_col=10, num_elite=0.05, timestep=0.05)
 
 	start_time_comp_cem = time.time()

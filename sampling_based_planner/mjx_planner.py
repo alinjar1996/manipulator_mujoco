@@ -115,6 +115,7 @@ class cem_planner():
 		# self.mask = jnp.where(self.mask==2, 0, self.mask)
 		# self.mask = self.mask.astype(bool)
 
+	
 		self.hande_id = self.model.body(name="hande").id
 		self.tcp_id = self.model.site(name="tcp").id
 
@@ -331,7 +332,6 @@ class cem_planner():
 
 		thetadot = jnp.dot(self.A_thetadot, xi_filtered.T).T
 
-		#jax.debug.print("thetadot has NaNs: {}", jnp.any(jnp.isnan(thetadot)))
 
 		theta, eef_pos, eef_rot, collision = self.compute_rollout_batch(thetadot, init_pos, init_vel)
 

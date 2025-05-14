@@ -8,11 +8,11 @@
         <geom name="target_0" pos="0 0 0" rgba="0 0.6 0 1" size="0.02 0.02 0.02" type="box"/>
     </body>
 
-    <body name="target_1" pos="0.3 0.3 0.5" quat="0.7071 0.7071 0.0 0.0">
+    <body name="target_1" pos="0.3 0.3 0.44" quat="0.7071 0.7071 0.0 0.0">
         <geom name="target_1" pos="0 0 0" rgba="0.6 0.6 0.6 1" size="0.02 0.02 0.02" type="box" />
     </body>
 
-    <body name="target_2" pos="0.0 0.0 0.5" quat="0.0 1.0 0.0 0.0">
+    <body name="target_2" pos="0.0 0.0 0.44" quat="0.0 1.0 0.0 0.0">
         <geom name="target_2" pos="0 0 0" rgba="0.6 0.6 0.6 1" size="0.02 0.02 0.02" type="box" />
     </body>
 

@@ -113,7 +113,9 @@ def run_cem_planner(
 
     # Initialize CEM mean
     xi_mean = jnp.zeros(cem.nvar)
-    xi_cov = 1*jnp.identity(cem.nvar)
+    xi_cov = 10.0*jnp.identity(cem.nvar)
+
+    print(f"xi_cov_shape: {xi_cov.shape}")
     
     # Get initial end-effector position and orientation
     init_position = data.site_xpos[model.site(name="tcp").id].copy()
@@ -163,12 +165,35 @@ def run_cem_planner(
                 if current_target == "target_1" and "target_0" in target_names:
                     model.body(name="target_0").pos = data.site_xpos[cem.tcp_id]
                     model.body(name="target_0").quat = data.xquat[cem.hande_id]
+                
+                
+                
 
+                if jnp.isnan(xi_cov).any():
+                    print("xi_cov_before contains NaNs!")
+
+
+                print(f"xi_cov_before_planner: {jnp.max(xi_cov)}")
+                
                 # Compute CEM control
                 cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean, xi_cov = cem.compute_cem(
                     xi_mean, xi_cov, data.qpos[:num_dof], data.qvel[:num_dof], 
                     data.qacc[:num_dof], target_pos, target_rot
                 )
+              
+                # Clip the diagonal elements between 0.01 and 50
+                # xi_diagonal = jnp.clip(jnp.diag(xi_cov), 0.01, 50)
+                # xi_cov = xi_cov.at[jnp.diag_indices_from(xi_cov)].set(xi_diagonal)
+
+                #xi_cov = jnp.clip(xi_cov, -15, 15)
+
+           
+                if jnp.isnan(xi_cov).any():
+                    print("xi_cov_after contains NaNs!")
+          
+                    
+                
+                print(f"xi_cov_after_planner: {jnp.max(xi_cov)}")
                 
                 # Apply the control (use average of planned velocities)
                 thetadot = np.mean(best_vels[1:num_steps], axis=0)

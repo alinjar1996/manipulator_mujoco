@@ -324,8 +324,8 @@ class cem_planner():
 	def cem_iter(self, carry, _):
 		init_pos, init_vel, target_pos, target_rot, xi_mean, xi_cov, key, state_term = carry
 
-		xi_mean_prev = xi_mean 
-		xi_cov_prev = xi_cov
+		# xi_mean_prev = xi_mean 
+		# xi_cov_prev = xi_cov
 
 		xi_samples, key = self.compute_xi_samples(key, xi_mean, xi_cov)
 		xi_filtered = self.compute_projection_filter(xi_samples, state_term)
@@ -344,7 +344,7 @@ class cem_planner():
 		cost_batch, cost_g_batch, cost_r_batch, cost_c_batch = self.compute_cost_batch(thetadot, eef_pos, eef_rot, collision, target_pos, target_rot)
 
 		xi_ellite, idx_ellite, cost_ellite = self.compute_ellite_samples(cost_batch, xi_samples)
-		xi_mean, xi_cov = self.compute_mean_cov(cost_ellite, xi_mean_prev, xi_cov_prev, xi_ellite)
+		xi_mean, xi_cov = self.compute_mean_cov(cost_ellite, xi_mean, xi_cov, xi_ellite)
 
 		carry = (init_pos, init_vel, target_pos, target_rot, xi_mean, xi_cov, key, state_term)
 

@@ -16,7 +16,8 @@ import time
 
 class cem_planner():
 
-	def __init__(self, num_dof=6, num_batch=100, num_steps=200, timestep=0.02, maxiter_cem=20, num_elite=0.1, w_pos=2, w_rot=0.03, w_col=0.1):
+	def __init__(self, num_dof=None, num_batch=None, num_steps=None, timestep=None, maxiter_cem=None, num_elite=None, w_pos=None, w_rot=None, w_col=None, 
+			     maxiter_projection=None):
 		super(cem_planner, self).__init__()
 	 
 		self.num_dof = num_dof
@@ -77,7 +78,7 @@ class cem_planner():
 		self.compute_boundary_vec_batch = (jax.vmap(self.compute_boundary_vec_single, in_axes = (0)  ))
 
 		self.key= jax.random.PRNGKey(0)
-		self.maxiter_projection = 10
+		self.maxiter_projection = maxiter_projection
 		self.maxiter_cem = maxiter_cem
 
 		self.v_max = 0.8

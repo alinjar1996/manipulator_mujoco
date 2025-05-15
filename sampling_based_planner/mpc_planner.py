@@ -17,6 +17,7 @@ def run_cem_planner(
     num_batch=None,
     num_steps=None,
     maxiter_cem=None,
+    maxiter_projection=None,
     w_pos=None,
     w_rot=None,
     w_col=None,
@@ -99,7 +100,8 @@ def run_cem_planner(
         w_rot=w_rot,
         w_col=w_col,
         num_elite=num_elite,
-        timestep=timestep
+        timestep=timestep,
+        maxiter_projection=maxiter_projection
     )
     print(f"Initialized CEM Planner: {round(time.time()-start_time, 2)}s")
 

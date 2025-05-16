@@ -349,7 +349,7 @@ class cem_planner():
 
 		carry = (init_pos, init_vel, target_pos, target_rot, xi_mean, xi_cov, key, state_term)
 
-		return carry, (cost_batch, cost_g_batch, cost_r_batch, cost_c_batch, thetadot, theta)
+		return carry, (cost_batch, cost_g_batch, cost_r_batch, cost_c_batch, thetadot, theta, xi_samples, xi_filtered)
 
 	@partial(jax.jit, static_argnums=(0,))
 	def compute_cem(
@@ -380,7 +380,7 @@ class cem_planner():
 		carry = (init_pos, init_vel, target_pos, target_rot, xi_mean, xi_cov, key, state_term)
 		scan_over = jnp.array([0]*self.maxiter_cem)
 		carry, out = jax.lax.scan(self.cem_iter, carry, scan_over, length=self.maxiter_cem)
-		cost_batch, cost_g_batch, cost_r_batch, cost_c_batch, thetadot, theta = out
+		cost_batch, cost_g_batch, cost_r_batch, cost_c_batch, thetadot, theta, xi_samples, xi_filtered = out
 
 		idx_min = jnp.argmin(cost_batch[-1])
 		cost = jnp.min(cost_batch, axis=1)
@@ -394,7 +394,9 @@ class cem_planner():
 		#jax.debug.print("best_cost_g: {}", best_cost_g)
 		xi_mean = carry[4]
 
-		return cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean
+		state_term = carry[7]
+
+		return cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean, state_term, xi_samples, xi_filtered
 	
 def main():
 	num_dof = 6

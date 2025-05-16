@@ -37,7 +37,7 @@ results = run_cem_planner(
     
     # Save data
     save_data=True,
-    data_dir='custom_data',
+    data_dir='new_data',
 
     #Stop at final target
     stop_at_final_target=True 

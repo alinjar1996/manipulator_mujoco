@@ -137,6 +137,10 @@ def run_cem_planner(
     cost_c_list = []
     thetadot_list = []
     theta_list = []
+
+    xi_samples_list = []
+    xi_filtered_list = []
+    state_terms_list = []
     
     # Current target index
     target_idx = 0
@@ -166,7 +170,7 @@ def run_cem_planner(
                     model.body(name="target_0").quat = data.xquat[cem.hande_id]
 
                 # Compute CEM control
-                cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean = cem.compute_cem(
+                cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean, state_terms, xi_samples, xi_filtered = cem.compute_cem(
                     xi_mean, data.qpos[:num_dof], data.qvel[:num_dof], 
                     data.qacc[:num_dof], target_pos, target_rot
                 )
@@ -224,6 +228,10 @@ def run_cem_planner(
                 theta_list.append(data.qpos[:num_dof].copy())
                 cost_list.append(current_cost[-1] if isinstance(current_cost, np.ndarray) else current_cost)
 
+                #Store data in .npz for including MLP in projection filter
+                xi_samples_list.append(np.array(xi_samples))
+                xi_filtered_list.append(np.array(xi_filtered))
+                state_terms_list.append(np.array(state_terms)) 
                 # Sleep to maintain simulation speed
                 time_until_next_step = model.opt.timestep - (time.time() - start_time)
                 if time_until_next_step > 0:
@@ -240,6 +248,16 @@ def run_cem_planner(
         np.savetxt(f'{data_dir}/cost_g.csv', cost_g_list, delimiter=",")
         np.savetxt(f'{data_dir}/cost_r.csv', cost_r_list, delimiter=",")
         np.savetxt(f'{data_dir}/cost_c.csv', cost_c_list, delimiter=",")
+        
+        print("Saving csv dataset...") 
+        np.savez(
+        os.path.join(data_dir, 'sample_dataset.npz'),
+        xi_samples=np.array(xi_samples_list),
+        xi_filtered=np.array(xi_filtered_list),
+        state_terms=np.array(state_terms_list)
+        )
+
+        print("Saving npz dataset...")
     
     return {
         'cost_g': cost_g_list,

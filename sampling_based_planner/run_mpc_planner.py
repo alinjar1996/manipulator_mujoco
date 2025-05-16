@@ -12,7 +12,7 @@ results = run_cem_planner(
     num_elite=0.05,   # Use More elite samples for better convergence #Int(num_elite*num_batch) is used to select elite samples
     timestep=0.05,     # Simulation Time Step Use Smaller timestep for more accurate simulation
     
-    maxiter_cem=3,      # CEM iterations: Use More iterations for better convergence     
+    maxiter_cem=1,      # CEM iterations: Use More iterations for better convergence     
     maxiter_projection=10,   # Projection Filter iterations: Use More iterations for better Filtering
     w_pos=20.0,      # weight on position error
     w_rot=3.0,       # weight on rotation error
@@ -38,6 +38,7 @@ results = run_cem_planner(
     # Save data
     save_data=True,
     data_dir='new_data',
+    save_interval=2,
 
     #Stop at final target
     stop_at_final_target=True 

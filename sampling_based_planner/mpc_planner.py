@@ -37,6 +37,7 @@ def run_cem_planner(
     # Save data
     save_data=None,
     data_dir=None,
+    save_interval=None,  # New parameter: Save data every N steps
     # Motion control
     stop_at_final_target=None
 ):
@@ -81,13 +82,20 @@ def run_cem_planner(
         Whether to save data to CSV files
     data_dir : str
         Directory to save data
+    save_interval : int
+        Save data every N steps (new parameter)
     stop_at_final_target : bool
         Whether to stop at the final target or loop back to the first target
     """
     
     # Create the directory for data if it doesn't exist and save_data is True
     if save_data:
-        os.makedirs(data_dir, exist_ok=True)
+        try:
+            print(f"Creating directory: {data_dir}")
+            os.makedirs(data_dir, exist_ok=True)
+            print(f"Directory created/exists: {os.path.exists(data_dir)}")
+        except Exception as e:
+            print(f"Error creating directory: {e}")
     
     # Initialize the CEM planner
     start_time = time.time()
@@ -146,6 +154,9 @@ def run_cem_planner(
     target_idx = 0
     current_target = target_names[target_idx]
     
+    # Add step counter for periodic saving
+    step_counter = 0
+    
     # Run the control loop
     if show_viewer:
         with viewer.launch_passive(model, data) as viewer_:
@@ -155,6 +166,9 @@ def run_cem_planner(
             while viewer_.is_running():
                 # Time the step
                 start_time = time.time()
+                
+                # Increment step counter
+                step_counter += 1
                 
                 # Determine target position and orientation
                 if current_target != "home":
@@ -186,11 +200,56 @@ def run_cem_planner(
                 current_cost = np.round(cost, 2)
                 
                 # Print status
-
                 print(f'Step Time: {"%.0f"%((time.time() - start_time)*1000)}ms | Cost g: {"%.2f"%(float(current_cost_g))}'
                       f' | Cost r: {"%.2f"%(float(current_cost_r))} | Cost c: {"%.2f"%(float(best_cost_c))} | Cost: {current_cost}')
                 print(f'eef_quat: {data.xquat[cem.hande_id]}')
                 print(f'target: {current_target}')
+                
+                # Store data
+                cost_g_list.append(best_cost_g)
+                cost_r_list.append(best_cost_r)
+                cost_c_list.append(best_cost_c)
+                thetadot_list.append(thetadot.copy())  # Use copy() to avoid reference issues
+                theta_list.append(data.qpos[:num_dof].copy())
+                cost_list.append(current_cost[-1] if isinstance(current_cost, np.ndarray) else current_cost)
+
+                # Store data for MLP in projection filter
+                xi_samples_list.append(np.array(xi_samples))
+                xi_filtered_list.append(np.array(xi_filtered))
+                state_terms_list.append(np.array(state_terms))
+                
+                # Periodic saving based on step counter
+                if save_data and step_counter % save_interval == 0:
+                    try:
+                        #print(f"Performing periodic save at step {step_counter}...")
+                        
+                        # Save NPZ data (main data for projection filter)
+                        npz_path = os.path.join(data_dir, 'sample_dataset.npz')
+                        np.savez(
+                            npz_path,
+                            xi_samples=np.array(xi_samples_list),
+                            xi_filtered=np.array(xi_filtered_list),
+                            state_terms=np.array(state_terms_list)
+                        )
+                        #print(f"Saved NPZ data to {npz_path}")
+                        
+                        # Save CSV data (trajectory and cost data)
+                        csv_files = {
+                            'costs.csv': cost_list,
+                            'thetadot.csv': thetadot_list,
+                            'theta.csv': theta_list,
+                            'cost_g.csv': cost_g_list,
+                            'cost_r.csv': cost_r_list,
+                            'cost_c.csv': cost_c_list
+                        }
+                        
+                        for filename, data_to_save in csv_files.items():
+                            filepath = os.path.join(data_dir, filename)
+                            np.savetxt(filepath, data_to_save, delimiter=",")
+                        
+                        #print(f"Periodic save complete at step {step_counter}")
+                    except Exception as e:
+                        print(f"Error during periodic save: {e}")
                 
                 # Update viewer
                 viewer_.sync()
@@ -220,18 +279,6 @@ def run_cem_planner(
                         model.body(name="target_0").pos = data.site_xpos[cem.tcp_id].copy()
                         model.body(name="target_0").quat = data.xquat[cem.hande_id].copy()
 
-                # Store data
-                cost_g_list.append(best_cost_g)
-                cost_r_list.append(best_cost_r)
-                cost_c_list.append(best_cost_c)
-                thetadot_list.append(thetadot)
-                theta_list.append(data.qpos[:num_dof].copy())
-                cost_list.append(current_cost[-1] if isinstance(current_cost, np.ndarray) else current_cost)
-
-                #Store data in .npz for including MLP in projection filter
-                xi_samples_list.append(np.array(xi_samples))
-                xi_filtered_list.append(np.array(xi_filtered))
-                state_terms_list.append(np.array(state_terms)) 
                 # Sleep to maintain simulation speed
                 time_until_next_step = model.opt.timestep - (time.time() - start_time)
                 if time_until_next_step > 0:
@@ -240,33 +287,34 @@ def run_cem_planner(
         # Non-visualization mode would go here if needed
         print("Running without visualization is not implemented yet.")
         
-    # Save data if requested
+    # Final save attempt when exiting normally
     if save_data:
-        np.savetxt(f'{data_dir}/costs.csv', cost_list, delimiter=",")
-        np.savetxt(f'{data_dir}/thetadot.csv', thetadot_list, delimiter=",")
-        np.savetxt(f'{data_dir}/theta.csv', theta_list, delimiter=",")
-        np.savetxt(f'{data_dir}/cost_g.csv', cost_g_list, delimiter=",")
-        np.savetxt(f'{data_dir}/cost_r.csv', cost_r_list, delimiter=",")
-        np.savetxt(f'{data_dir}/cost_c.csv', cost_c_list, delimiter=",")
-        
-        print("Saving csv dataset...") 
-        np.savez(
-        os.path.join(data_dir, 'sample_dataset.npz'),
-        xi_samples=np.array(xi_samples_list),
-        xi_filtered=np.array(xi_filtered_list),
-        state_terms=np.array(state_terms_list)
-        )
+        try:
+            # Save NPZ data
+            npz_path = os.path.join(data_dir, 'sample_dataset_final.npz')
+            np.savez(
+                npz_path,
+                xi_samples=np.array(xi_samples_list),
+                xi_filtered=np.array(xi_filtered_list),
+                state_terms=np.array(state_terms_list)
+            )
+            
+            # Save CSV data
+            csv_files = {
+                'costs_final.csv': cost_list,
+                'thetadot_final.csv': thetadot_list,
+                'theta_final.csv': theta_list,
+                'cost_g_final.csv': cost_g_list,
+                'cost_r_final.csv': cost_r_list,
+                'cost_c_final.csv': cost_c_list
+            }
+            
+            for filename, data_to_save in csv_files.items():
+                filepath = os.path.join(data_dir, filename)
+                np.savetxt(filepath, data_to_save, delimiter=",")
+        except Exception as e:
+            print(f"Error during final save: {e}")
 
-        print("Saving npz dataset...")
-    
-    return {
-        'cost_g': cost_g_list,
-        'cost_r': cost_r_list,
-        'cost_c': cost_c_list,
-        'cost': cost_list,
-        'thetadot': thetadot_list,
-        'theta': theta_list
-    }
 
 if __name__ == "__main__":
     # Parse command line arguments
@@ -277,6 +325,7 @@ if __name__ == "__main__":
     parser.add_argument('--num_batch', type=int, default=1000, help='Number of samples in each CEM iteration')
     parser.add_argument('--num_steps', type=int, default=16, help='Number of steps in the planning horizon')
     parser.add_argument('--maxiter_cem', type=int, default=1, help='Maximum number of CEM iterations')
+    parser.add_argument('--maxiter_projection', type=int, default=10, help='Maximum number of projection iterations')
     parser.add_argument('--w_pos', type=float, default=20.0, help='Weight for position error')
     parser.add_argument('--w_rot', type=float, default=3.0, help='Weight for rotation error')
     parser.add_argument('--w_col', type=float, default=10.0, help='Weight for collision penalty')
@@ -301,6 +350,7 @@ if __name__ == "__main__":
     # Save data
     parser.add_argument('--save_data', action='store_true', help='Save data to CSV files')
     parser.add_argument('--data_dir', type=str, default='data', help='Directory to save data')
+    parser.add_argument('--save_interval', type=int, default=10, help='Save data every N steps')
     parser.add_argument('--continue_after_final', action='store_true', help='Continue movement after reaching final target (loop)')
     
     args = parser.parse_args()
@@ -311,6 +361,7 @@ if __name__ == "__main__":
         num_batch=args.num_batch,
         num_steps=args.num_steps,
         maxiter_cem=args.maxiter_cem,
+        maxiter_projection=args.maxiter_projection,
         w_pos=args.w_pos,
         w_rot=args.w_rot,
         w_col=args.w_col,
@@ -325,5 +376,6 @@ if __name__ == "__main__":
         rotation_threshold=args.rotation_threshold,
         save_data=args.save_data,
         data_dir=args.data_dir,
+        save_interval=args.save_interval,
         stop_at_final_target=not args.continue_after_final
     )

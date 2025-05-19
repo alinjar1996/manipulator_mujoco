@@ -226,11 +226,6 @@ def run_cem_planner(
                     target_pos = init_position
                     target_rot = init_rotation
 
-                # Special case for target_1 (moving target with end-effector)
-                if current_target == "target_1" and "target_0" in target_names:
-                    model.body(name="target_0").pos = data.site_xpos[cem.tcp_id]
-                    model.body(name="target_0").quat = data.xquat[cem.hande_id]
-
                 # Compute CEM control
                 cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean, state_terms, xi_samples, xi_filtered = cem.compute_cem(
                     xi_mean, data.qpos[:num_dof], data.qvel[:num_dof], 
@@ -289,10 +284,6 @@ def run_cem_planner(
                         current_target = target_names[target_idx]
                         print(f"Moving to next target: {current_target}")
                     
-                    # If transitioning to home, save current position for reference
-                    if current_target == "home" and "target_0" in target_names:
-                        model.body(name="target_0").pos = data.site_xpos[cem.tcp_id].copy()
-                        model.body(name="target_0").quat = data.xquat[cem.hande_id].copy()
 
                 # Sleep to maintain simulation speed
                 time_until_next_step = model.opt.timestep - (time.time() - start_time)

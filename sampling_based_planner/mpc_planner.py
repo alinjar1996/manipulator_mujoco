@@ -10,6 +10,67 @@ from mujoco import viewer
 import matplotlib.pyplot as plt
 from quat_math import rotation_quaternion, quaternion_multiply, quaternion_distance
 import argparse
+import signal
+import sys
+
+# Global variables to store data for saving on exit
+global_data = {
+    'xi_samples_list': [],
+    'xi_filtered_list': [],
+    'state_terms_list': [],
+    'cost_list': [],
+    'thetadot_list': [],
+    'theta_list': [],
+    'cost_g_list': [],
+    'cost_r_list': [],
+    'cost_c_list': [],
+    'data_dir': None,
+    'save_data': False
+}
+
+def save_data_on_exit(signum=None, frame=None):
+    """Save all collected data when program is terminated"""
+    if not global_data['save_data']:
+        print("Data saving not enabled. Exiting without saving.")
+        sys.exit(0)
+        
+    try:
+        print("\nReceived termination signal. Saving data before exit...")
+        data_dir = global_data['data_dir']
+        
+        # Create directory if it doesn't exist
+        os.makedirs(data_dir, exist_ok=True)
+        
+        # Save NPZ data
+        npz_path = os.path.join(data_dir, 'sample_dataset_final.npz')
+        np.savez(
+            npz_path,
+            xi_samples=np.array(global_data['xi_samples_list']),
+            xi_filtered=np.array(global_data['xi_filtered_list']),
+            state_terms=np.array(global_data['state_terms_list'])
+        )
+        print(f"Saved NPZ data to {npz_path}")
+        
+        # Save CSV data
+        csv_files = {
+            'costs_final.csv': global_data['cost_list'],
+            'thetadot_final.csv': global_data['thetadot_list'],
+            'theta_final.csv': global_data['theta_list'],
+            'cost_g_final.csv': global_data['cost_g_list'],
+            'cost_r_final.csv': global_data['cost_r_list'],
+            'cost_c_final.csv': global_data['cost_c_list']
+        }
+        
+        for filename, data_to_save in csv_files.items():
+            filepath = os.path.join(data_dir, filename)
+            np.savetxt(filepath, data_to_save, delimiter=",")
+            print(f"Saved {filename}")
+            
+        print("All data saved successfully!")
+    except Exception as e:
+        print(f"Error during emergency save: {e}")
+    finally:
+        sys.exit(0)
 
 def run_cem_planner(
     # CEM planner parameters
@@ -37,7 +98,7 @@ def run_cem_planner(
     # Save data
     save_data=None,
     data_dir=None,
-    save_interval=None,  # New parameter: Save data every N steps
+    save_interval=None,  # No longer used but kept for compatibility
     # Motion control
     stop_at_final_target=None
 ):
@@ -83,19 +144,22 @@ def run_cem_planner(
     data_dir : str
         Directory to save data
     save_interval : int
-        Save data every N steps (new parameter)
+        Parameter kept for compatibility but no longer used
     stop_at_final_target : bool
         Whether to stop at the final target or loop back to the first target
     """
     
-    # Create the directory for data if it doesn't exist and save_data is True
+    # Update global data dictionary
+    global_data['save_data'] = save_data
+    global_data['data_dir'] = data_dir
+    
+    # Setup signal handlers for proper termination
+    signal.signal(signal.SIGINT, save_data_on_exit)   # Ctrl+C
+    signal.signal(signal.SIGTERM, save_data_on_exit)  # termination signal
+    
     if save_data:
-        try:
-            print(f"Creating directory: {data_dir}")
-            os.makedirs(data_dir, exist_ok=True)
-            print(f"Directory created/exists: {os.path.exists(data_dir)}")
-        except Exception as e:
-            print(f"Error creating directory: {e}")
+        print(f"Data will be saved to '{data_dir}' when the program is terminated.")
+        print("Use Ctrl+C to gracefully exit and save data.")
     
     # Initialize the CEM planner
     start_time = time.time()
@@ -137,25 +201,12 @@ def run_cem_planner(
     _ = cem.compute_cem(xi_mean, data.qpos[:num_dof], data.qvel[:num_dof], data.qacc[:num_dof], target_pos, target_rot)
     print(f"Compute CEM: {round(time.time()-start_time, 2)}s")
 
-    # Initialize variables for data collection
+    # Initialize variables for data collection - we'll use the global variables now
     thetadot = np.array([0] * num_dof)
-    cost_g_list = []
-    cost_list = []
-    cost_r_list = []
-    cost_c_list = []
-    thetadot_list = []
-    theta_list = []
-
-    xi_samples_list = []
-    xi_filtered_list = []
-    state_terms_list = []
     
     # Current target index
     target_idx = 0
     current_target = target_names[target_idx]
-    
-    # Add step counter for periodic saving
-    step_counter = 0
     
     # Run the control loop
     if show_viewer:
@@ -166,9 +217,6 @@ def run_cem_planner(
             while viewer_.is_running():
                 # Time the step
                 start_time = time.time()
-                
-                # Increment step counter
-                step_counter += 1
                 
                 # Determine target position and orientation
                 if current_target != "home":
@@ -205,51 +253,18 @@ def run_cem_planner(
                 print(f'eef_quat: {data.xquat[cem.hande_id]}')
                 print(f'target: {current_target}')
                 
-                # Store data
-                cost_g_list.append(best_cost_g)
-                cost_r_list.append(best_cost_r)
-                cost_c_list.append(best_cost_c)
-                thetadot_list.append(thetadot.copy())  # Use copy() to avoid reference issues
-                theta_list.append(data.qpos[:num_dof].copy())
-                cost_list.append(current_cost[-1] if isinstance(current_cost, np.ndarray) else current_cost)
+                # Store data in global variables
+                global_data['cost_g_list'].append(best_cost_g)
+                global_data['cost_r_list'].append(best_cost_r)
+                global_data['cost_c_list'].append(best_cost_c)
+                global_data['thetadot_list'].append(thetadot.copy())  # Use copy() to avoid reference issues
+                global_data['theta_list'].append(data.qpos[:num_dof].copy())
+                global_data['cost_list'].append(current_cost[-1] if isinstance(current_cost, np.ndarray) else current_cost)
 
                 # Store data for MLP in projection filter
-                xi_samples_list.append(np.array(xi_samples))
-                xi_filtered_list.append(np.array(xi_filtered))
-                state_terms_list.append(np.array(state_terms))
-                
-                # Periodic saving based on step counter
-                if save_data and step_counter % save_interval == 0:
-                    try:
-                        #print(f"Performing periodic save at step {step_counter}...")
-                        
-                        # Save NPZ data (main data for projection filter)
-                        npz_path = os.path.join(data_dir, 'sample_dataset.npz')
-                        np.savez(
-                            npz_path,
-                            xi_samples=np.array(xi_samples_list),
-                            xi_filtered=np.array(xi_filtered_list),
-                            state_terms=np.array(state_terms_list)
-                        )
-                        #print(f"Saved NPZ data to {npz_path}")
-                        
-                        # Save CSV data (trajectory and cost data)
-                        csv_files = {
-                            'costs.csv': cost_list,
-                            'thetadot.csv': thetadot_list,
-                            'theta.csv': theta_list,
-                            'cost_g.csv': cost_g_list,
-                            'cost_r.csv': cost_r_list,
-                            'cost_c.csv': cost_c_list
-                        }
-                        
-                        for filename, data_to_save in csv_files.items():
-                            filepath = os.path.join(data_dir, filename)
-                            np.savetxt(filepath, data_to_save, delimiter=",")
-                        
-                        #print(f"Periodic save complete at step {step_counter}")
-                    except Exception as e:
-                        print(f"Error during periodic save: {e}")
+                global_data['xi_samples_list'].append(np.array(xi_samples))
+                global_data['xi_filtered_list'].append(np.array(xi_filtered))
+                global_data['state_terms_list'].append(np.array(state_terms))
                 
                 # Update viewer
                 viewer_.sync()
@@ -287,34 +302,6 @@ def run_cem_planner(
         # Non-visualization mode would go here if needed
         print("Running without visualization is not implemented yet.")
         
-    # Final save attempt when exiting normally
-    if save_data:
-        try:
-            # Save NPZ data
-            npz_path = os.path.join(data_dir, 'sample_dataset_final.npz')
-            np.savez(
-                npz_path,
-                xi_samples=np.array(xi_samples_list),
-                xi_filtered=np.array(xi_filtered_list),
-                state_terms=np.array(state_terms_list)
-            )
-            
-            # Save CSV data
-            csv_files = {
-                'costs_final.csv': cost_list,
-                'thetadot_final.csv': thetadot_list,
-                'theta_final.csv': theta_list,
-                'cost_g_final.csv': cost_g_list,
-                'cost_r_final.csv': cost_r_list,
-                'cost_c_final.csv': cost_c_list
-            }
-            
-            for filename, data_to_save in csv_files.items():
-                filepath = os.path.join(data_dir, filename)
-                np.savetxt(filepath, data_to_save, delimiter=",")
-        except Exception as e:
-            print(f"Error during final save: {e}")
-
 
 if __name__ == "__main__":
     # Parse command line arguments
@@ -350,32 +337,40 @@ if __name__ == "__main__":
     # Save data
     parser.add_argument('--save_data', action='store_true', help='Save data to CSV files')
     parser.add_argument('--data_dir', type=str, default='data', help='Directory to save data')
-    parser.add_argument('--save_interval', type=int, default=10, help='Save data every N steps')
+    parser.add_argument('--save_interval', type=int, default=10, help='Parameter kept for compatibility but no longer used')
     parser.add_argument('--continue_after_final', action='store_true', help='Continue movement after reaching final target (loop)')
     
     args = parser.parse_args()
     
-    # Run CEM planner with parsed arguments
-    run_cem_planner(
-        num_dof=args.num_dof,
-        num_batch=args.num_batch,
-        num_steps=args.num_steps,
-        maxiter_cem=args.maxiter_cem,
-        maxiter_projection=args.maxiter_projection,
-        w_pos=args.w_pos,
-        w_rot=args.w_rot,
-        w_col=args.w_col,
-        num_elite=args.num_elite,
-        timestep=args.timestep,
-        initial_qpos=args.initial_qpos,
-        target_names=args.targets,
-        show_viewer=not args.no_viewer,
-        cam_distance=args.cam_distance,
-        show_contact_points=not args.no_contact_points,
-        position_threshold=args.position_threshold,
-        rotation_threshold=args.rotation_threshold,
-        save_data=args.save_data,
-        data_dir=args.data_dir,
-        save_interval=args.save_interval,
-        stop_at_final_target=not args.continue_after_final
-    )
+    try:
+        # Run CEM planner with parsed arguments
+        run_cem_planner(
+            num_dof=args.num_dof,
+            num_batch=args.num_batch,
+            num_steps=args.num_steps,
+            maxiter_cem=args.maxiter_cem,
+            maxiter_projection=args.maxiter_projection,
+            w_pos=args.w_pos,
+            w_rot=args.w_rot,
+            w_col=args.w_col,
+            num_elite=args.num_elite,
+            timestep=args.timestep,
+            initial_qpos=args.initial_qpos,
+            target_names=args.targets,
+            show_viewer=not args.no_viewer,
+            cam_distance=args.cam_distance,
+            show_contact_points=not args.no_contact_points,
+            position_threshold=args.position_threshold,
+            rotation_threshold=args.rotation_threshold,
+            save_data=args.save_data,
+            data_dir=args.data_dir,
+            save_interval=args.save_interval,
+            stop_at_final_target=not args.continue_after_final
+        )
+    except KeyboardInterrupt:
+        # This will be caught by the signal handler
+        pass
+    finally:
+        # Just in case the signal handler didn't trigger
+        if args.save_data:
+            save_data_on_exit()

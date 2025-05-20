@@ -37,3 +37,9 @@ six==1.17.0
 trimesh==4.6.6
 typing_extensions==4.13.2
 zipp==3.21.0
+
+torch==2.5.1
+torchaudio==2.5.1
+torchvision==0.20.1
+tornado==6.4.2
+tqdm==4.67.1

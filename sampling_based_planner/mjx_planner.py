@@ -12,6 +12,10 @@ import mujoco
 import mujoco.mjx as mjx 
 import jax
 import time
+from mlp_manipulator import MLP, MLPProjectionFilter
+
+import torch
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class cem_planner():
@@ -167,6 +171,15 @@ class cem_planner():
 		Q_inv = np.linalg.inv(np.vstack((np.hstack(( np.dot(self.A_projection.T, self.A_projection)+self.rho_ineq*jnp.dot(self.A_v_ineq.T, self.A_v_ineq)+self.rho_ineq*jnp.dot(self.A_a_ineq.T, self.A_a_ineq)+self.rho_ineq*jnp.dot(self.A_p_ineq.T, self.A_p_ineq), A_eq.T)  ), 
 									 np.hstack((A_eq, np.zeros((np.shape(A_eq)[0], np.shape(A_eq)[0])))))))	
 		return Q_inv
+	
+	def mlp_inference(self, mlp_inp_dim, hidden_dim, mlp_out_dim, num_batch, inp_mean, inp_std, t_fin):
+		mlp =  MLP(mlp_inp_dim, hidden_dim, mlp_out_dim)
+		
+		model = MLPProjectionFilter(self.P, self.Pdot, self.Pddot, mlp, num_batch, inp_mean, inp_std, t_fin).to(device)
+
+		model.load_state_dict(torch.load("./training_weights/mlp_learned_proj_manipulator.pth"))
+		model.eval()
+
 
 	@partial(jax.jit, static_argnums=(0,))
 	def compute_boundary_vec_single(self, state_term):

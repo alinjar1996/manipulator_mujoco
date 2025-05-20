@@ -16,6 +16,7 @@ from mlp_manipulator import MLP, MLPProjectionFilter
 
 import torch
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+from training import TrajectoryTrainer as trainer
 
 
 class cem_planner():
@@ -172,13 +173,20 @@ class cem_planner():
 									 np.hstack((A_eq, np.zeros((np.shape(A_eq)[0], np.shape(A_eq)[0])))))))	
 		return Q_inv
 	
-	def mlp_inference(self, mlp_inp_dim, hidden_dim, mlp_out_dim, num_batch, inp_mean, inp_std, t_fin):
+	def mlp_inference(self, mlp_inp_dim, hidden_dim, mlp_out_dim, num_batch, inp, inp_mean, inp_std, t_fin):
 		mlp =  MLP(mlp_inp_dim, hidden_dim, mlp_out_dim)
 		
 		model = MLPProjectionFilter(self.P, self.Pdot, self.Pddot, mlp, num_batch, inp_mean, inp_std, t_fin).to(device)
 
 		model.load_state_dict(torch.load("./training_weights/mlp_learned_proj_manipulator.pth"))
 		model.eval()
+        
+		input_tensor = torch.tensor(inp, dtype=torch.float32)
+		with torch.no_grad():
+			output = model(input_tensor)
+    		
+
+		return output.cpu().np()	
 
 
 	@partial(jax.jit, static_argnums=(0,))
@@ -242,6 +250,27 @@ class cem_planner():
 		lamda_v = jnp.zeros(( self.num_batch, self.nvar  ))
 		lamda_a = jnp.zeros(( self.num_batch, self.nvar  ))
 		lamda_p = jnp.zeros(( self.num_batch, self.nvar  ))
+
+		mlp_inp_dim = trainer().mlp_inp_dim
+		hidden_dim = trainer().hidden_dim
+		mlp_out_dim = trainer().mlp_out_dim
+		num_batches = trainer().num_batch
+		inp = trainer().xi_samples
+		inp_mean = trainer().inp_mean
+		inp_std = trainer().inp_std
+		t_fin = trainer().t_fin
+
+		output = self.mlp_inference(mlp_inp_dim, hidden_dim, mlp_out_dim, num_batches, inp, inp_mean, inp_std, t_fin)
+		
+		lamda_samples = output[:, 0 : 3*self.nvar  ]
+    	
+		lamda_v = lamda_samples[:, 0 : self.nvar]
+		lamda_a = lamda_samples[:, self.nvar:2*self.nvar]
+		lamda_p = lamda_samples[:, 2*self.nvar:3*self.nvar]	
+
+		xi_samples = output[:, 3*self.nvar : 4*self.nvar]
+
+          
 		
 		for i in range(0, self.maxiter_projection):
 			primal_sol, s_v, s_a, s_p,  lamda_v, lamda_a, lamda_p, res_projection  = self.compute_projection(lamda_v, lamda_a, lamda_p, s_v, s_a, s_p,b_eq_term,  xi_samples)

@@ -166,6 +166,9 @@ def run_cem_planner(
                     model.body(name="target_0").quat = data.xquat[cem.hande_id]
 
                 # Compute CEM control
+                # Compute raw samples from mean and covariance
+                # Pass raw sample through to Network
+                #Raw sample and initialize 
                 cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean = cem.compute_cem(
                     xi_mean, data.qpos[:num_dof], data.qvel[:num_dof], 
                     data.qacc[:num_dof], target_pos, target_rot

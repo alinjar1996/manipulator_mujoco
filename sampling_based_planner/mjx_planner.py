@@ -166,6 +166,9 @@ class cem_planner():
 	def get_Q_inv(self, A_eq):
 		Q_inv = np.linalg.inv(np.vstack((np.hstack(( np.dot(self.A_projection.T, self.A_projection)+self.rho_ineq*jnp.dot(self.A_v_ineq.T, self.A_v_ineq)+self.rho_ineq*jnp.dot(self.A_a_ineq.T, self.A_a_ineq)+self.rho_ineq*jnp.dot(self.A_p_ineq.T, self.A_p_ineq), A_eq.T)  ), 
 									 np.hstack((A_eq, np.zeros((np.shape(A_eq)[0], np.shape(A_eq)[0])))))))	
+		print('Q_inv', np.shape(Q_inv))
+		print('A_eq', np.shape(A_eq))
+		
 		return Q_inv
 
 	@partial(jax.jit, static_argnums=(0,))
@@ -196,7 +199,18 @@ class cem_planner():
   
 		lincost = -lamda_v-lamda_a-lamda_p-self.rho_projection*jnp.dot(self.A_projection.T, xi_samples.T).T-self.rho_ineq*jnp.dot(self.A_v_ineq.T, b_v_aug.T).T-self.rho_ineq*jnp.dot(self.A_a_ineq.T, b_a_aug.T).T-self.rho_ineq*jnp.dot(self.A_p_ineq.T, b_p_aug.T).T
 		sol = jnp.dot(self.Q_inv, jnp.hstack(( -lincost, b_eq_term )).T).T
-  
+        
+		Q_ = jnp.dot(self.A_projection.T, self.A_projection) + \
+                  self.rho_ineq * jnp.dot(self.A_v_ineq.T, self.A_v_ineq) + \
+                  self.rho_ineq * jnp.dot(self.A_a_ineq.T, self.A_a_ineq) + \
+                  self.rho_ineq * jnp.dot(self.A_p_ineq.T, self.A_p_ineq)
+		
+		# jax.debug.print("Q {}", jnp.shape(Q_))
+		# jax.debug.print("A_projection {}", jnp.shape(self.A_projection))
+		# jax.debug.print("A_v_ineq {}", jnp.shape(self.A_v_ineq))
+		# jax.debug.print("A_a_ineq {}", jnp.shape(self.A_a_ineq))
+        
+
 		primal_sol = sol[:, 0:self.nvar]
 		s_v = jnp.maximum( jnp.zeros(( self.num_batch, 2*self.num*self.num_dof )), -jnp.dot(self.A_v_ineq, primal_sol.T).T+b_v  )
 		res_v = jnp.dot(self.A_v_ineq, primal_sol.T).T-b_v+s_v 
@@ -223,6 +237,8 @@ class cem_planner():
 	def compute_projection_filter(self, xi_samples, state_term):
 
 		b_eq_term = self.compute_boundary_vec_batch(state_term)
+
+		jax.debug.print("b_eq_term {}", jnp.shape(b_eq_term))
 		s_v = jnp.zeros((self.num_batch, 2*self.num_dof*self.num   ))
 		s_a = jnp.zeros((self.num_batch, 2*self.num_dof*self.num   ))
 		s_p = jnp.zeros((self.num_batch, 2*self.num_dof*self.num   ))
@@ -330,6 +346,8 @@ class cem_planner():
 
 		xi_samples, key = self.compute_xi_samples(key, xi_mean, xi_cov)
 		xi_filtered = self.compute_projection_filter(xi_samples, state_term)
+
+		#jax.debug.print("filter to sample difference: {}", jnp.linalg.norm((xi_filtered - xi_samples), axis = 0))
 
 		thetadot = jnp.dot(self.A_thetadot, xi_filtered.T).T
 

@@ -166,8 +166,8 @@ class cem_planner():
 	def get_Q_inv(self, A_eq):
 		Q_inv = np.linalg.inv(np.vstack((np.hstack(( np.dot(self.A_projection.T, self.A_projection)+self.rho_ineq*jnp.dot(self.A_v_ineq.T, self.A_v_ineq)+self.rho_ineq*jnp.dot(self.A_a_ineq.T, self.A_a_ineq)+self.rho_ineq*jnp.dot(self.A_p_ineq.T, self.A_p_ineq), A_eq.T)  ), 
 									 np.hstack((A_eq, np.zeros((np.shape(A_eq)[0], np.shape(A_eq)[0])))))))	
-		print('Q_inv', np.shape(Q_inv))
-		print('A_eq', np.shape(A_eq))
+		# print('Q_inv', np.shape(Q_inv))
+		# print('A_eq', np.shape(A_eq))
 		
 		return Q_inv
 
@@ -238,7 +238,7 @@ class cem_planner():
 
 		b_eq_term = self.compute_boundary_vec_batch(state_term)
 
-		jax.debug.print("b_eq_term {}", jnp.shape(b_eq_term))
+		# jax.debug.print("b_eq_term {}", jnp.shape(b_eq_term))
 		s_v = jnp.zeros((self.num_batch, 2*self.num_dof*self.num   ))
 		s_a = jnp.zeros((self.num_batch, 2*self.num_dof*self.num   ))
 		s_p = jnp.zeros((self.num_batch, 2*self.num_dof*self.num   ))

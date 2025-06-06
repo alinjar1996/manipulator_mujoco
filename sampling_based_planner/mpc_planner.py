@@ -11,6 +11,107 @@ import matplotlib.pyplot as plt
 from quat_math import rotation_quaternion, quaternion_multiply, quaternion_distance
 import argparse
 
+from functools import partial
+
+from mlp_inference import rnn_inference
+from RNN.mlp_singledof_rnn import MLP, MLPProjectionFilter, CustomGRULayer, GRU_Hidden_State, CustomLSTMLayer, LSTM_Hidden_State
+
+import torch 
+import torch.nn as nn 
+import torch.optim as optim
+
+from torch.utils.data import Dataset, DataLoader
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using {device} device")
+
+def robust_scale(input_nn: jnp.ndarray) -> jnp.ndarray:
+    """
+    Normalize input using median and IQR (Robust scaling).
+    
+    Args:
+        input_nn (jnp.ndarray): Input data of shape (batch_size, features)
+
+    Returns:
+        inp_norm (jnp.ndarray): Robustly normalized data
+    """
+    inp_median_ = jnp.median(input_nn, axis=0)
+    inp_q1 = jnp.quantile(input_nn, 0.25, axis=0)
+    inp_q3 = jnp.quantile(input_nn, 0.75, axis=0)
+    inp_iqr_ = inp_q3 - inp_q1
+
+    # Handle constant features (IQR = 0)
+    inp_iqr_ = jnp.where(inp_iqr_ == 0, 1.0, inp_iqr_)
+
+    inp_norm = (input_nn - inp_median_) / inp_iqr_
+    return inp_norm
+
+@partial(jax.jit, static_argnames=['nvar', 'num_batch'])
+def compute_xi_samples(key, xi_mean, xi_cov, nvar, num_batch ):
+    key, subkey = jax.random.split(key)
+    xi_samples = jax.random.multivariate_normal(key, xi_mean, xi_cov+0.003*jnp.identity(nvar), (num_batch, ))
+    return xi_samples, key
+
+def load_mlp_projection_model(
+    inp, inp_norm, rnn_type, num_total_constraints, nvar, num_batch, num_dof, num_steps,
+    timestep, cem, maxiter_projection, device='cuda'):
+
+    enc_inp_dim = np.shape(inp)[1]
+    mlp_inp_dim = enc_inp_dim
+    hidden_dim = 1024
+    mlp_out_dim = 2 * nvar + num_total_constraints
+
+    if rnn_type == "GRU":
+        print("Training with GRU")
+        rnn_input_size = 3 * num_total_constraints + 3 * nvar
+        rnn_hidden_size = 512
+        rnn_output_size = num_total_constraints + nvar
+        rnn_context = CustomGRULayer(rnn_input_size, rnn_hidden_size, rnn_output_size)
+        rnn_init = GRU_Hidden_State(mlp_inp_dim, rnn_hidden_size, rnn_hidden_size)
+
+    elif rnn_type == "LSTM":
+        print("Training with LSTM")
+        rnn_input_size = 3 * num_total_constraints + 3 * nvar
+        rnn_hidden_size = 512
+        rnn_output_size = num_total_constraints + nvar
+        rnn_context = CustomLSTMLayer(rnn_input_size, rnn_hidden_size, rnn_output_size)
+        rnn_init = LSTM_Hidden_State(mlp_inp_dim, rnn_hidden_size, rnn_hidden_size)
+
+    else:
+        raise ValueError(f"Unsupported RNN type: {rnn_type}")
+
+    mlp = MLP(mlp_inp_dim, hidden_dim, mlp_out_dim)
+
+    model = MLPProjectionFilter(
+        mlp=mlp,
+        rnn_context=rnn_context,
+        rnn_init=rnn_init,
+        num_batch=num_batch,
+        num_dof=num_dof,
+        num_steps=num_steps,
+        timestep=timestep,
+        v_max=cem.v_max,
+        a_max=cem.a_max,
+        j_max=5.0,
+        p_max=cem.p_max,
+        maxiter_projection=maxiter_projection,
+        rnn=rnn_type
+    ).to(device)
+
+    print(f"Model type: {type(model)}")
+    
+    current_working_directory = os.getcwd()
+    print(current_working_directory)
+    
+    weight_path = f'./training_weights/mlp_learned_single_dof_{rnn_type}.pth'
+    model.load_state_dict(torch.load(weight_path, weights_only=True))
+    model.eval()
+
+    # Run forward pass
+    neural_output_batch = model.mlp(inp_norm)
+
+    return model, neural_output_batch
+
 def run_cem_planner(
     # CEM planner parameters
     num_dof=None,
@@ -113,8 +214,17 @@ def run_cem_planner(
     data.qpos[:num_dof] = jnp.array(initial_qpos)
     mujoco.mj_forward(model, data)
 
-    # Initialize CEM mean
-    xi_mean = jnp.zeros(cem.nvar)
+    # Initialize CEM mean and covariance
+    xi_mean_single = jnp.zeros(cem.nvar_single)
+    xi_cov_single = 10*jnp.identity(cem.nvar_single)
+
+    xi_mean = jnp.zeros((cem.nvar))
+    xi_cov = 10*jnp.identity(cem.nvar)
+
+    #Initialize lamda and s
+    lamda_init = jnp.zeros(( cem.num_batch, 3*cem.nvar_single  ))
+    s_init = jnp.zeros((cem.num_batch, 6*cem.num))
+
     
     # Get initial end-effector position and orientation
     init_position = data.site_xpos[model.site(name="tcp").id].copy()
@@ -126,7 +236,7 @@ def run_cem_planner(
 
     # Warm-up computation
     start_time = time.time()
-    _ = cem.compute_cem(xi_mean, data.qpos[:num_dof], data.qvel[:num_dof], data.qacc[:num_dof], target_pos, target_rot)
+    _ = cem.compute_cem(xi_mean, xi_cov, data.qpos[:num_dof], data.qvel[:num_dof], data.qacc[:num_dof], target_pos, target_rot, lamda_init, s_init)
     print(f"Compute CEM: {round(time.time()-start_time, 2)}s")
 
     # Initialize variables for data collection
@@ -141,6 +251,18 @@ def run_cem_planner(
     # Current target index
     target_idx = 0
     current_target = target_names[target_idx]
+
+    #Calculate number constraints
+    #calculating number of constraints
+    num_acc = cem.num - 1
+    num_jerk = num_acc - 1
+    num_pos = cem.num
+    num_vel_constraints = 2 * cem.num * num_dof
+    num_acc_constraints = 2 * num_acc * num_dof
+    num_jerk_constraints = 2 * num_jerk * num_dof
+    num_pos_constraints = 2 * num_pos * num_dof
+    num_total_constraints = (num_vel_constraints + num_acc_constraints + 
+                                num_jerk_constraints + num_pos_constraints)
     
     # Run the control loop
     if show_viewer:
@@ -168,10 +290,47 @@ def run_cem_planner(
                 # Compute CEM control
                 # Compute raw samples from mean and covariance
                 # Pass raw sample through to Network
-                #Raw sample and initialize 
-                cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean = cem.compute_cem(
+                #Raw sample and initialize
+                 
+                #rnn_inference(rnn_type="LSTM", model_weights_path=None, dataset_size=1000):
+
+                key = jax.random.PRNGKey(42)
+                xi_samples_single, key = compute_xi_samples(key, xi_mean_single, xi_cov_single, cem.nvar_single, cem.num_batch)
+                theta_init = jnp.array([0.0]*cem.num_batch).reshape(-1, 1)
+                v_start = jnp.array([0.0]*cem.num_batch).reshape(-1, 1)
+                v_goal = jnp.array([0.0]*cem.num_batch).reshape(-1, 1)
+
+                inp = jnp.hstack([xi_samples_single, theta_init, v_start, v_goal])
+
+                rnn = 'LSTM'
+
+                inp_norm = robust_scale(inp)
+                model, neural_output_batch = load_mlp_projection_model(inp, inp_norm, rnn, 
+                                                                       num_total_constraints, cem.nvar_single, num_batch, num_dof, num_steps,
+                                                                       timestep, cem, maxiter_projection, device= device)
+
+                # s_v = jnp.zeros((cem.num_batch, 2*cem.num_dof*cem.num   ))
+                # s_a = jnp.zeros((cem.num_batch, 2*cem.num_dof*cem.num   ))
+                # s_p = jnp.zeros((cem.num_batch, 2*cem.num_dof*cem.num   ))
+                # lamda_v = jnp.zeros(( cem.num_batch, cem.nvar  ))
+                # lamda_a = jnp.zeros(( cem.num_batch, cem.nvar  ))
+                # lamda_p = jnp.zeros(( cem.num_batch, cem.nvar  ))
+
+                
+        
+                # For simplicity, use neural output as initial guess
+                # In practice, you might want to structure this differently
+                xi_projected_output_nn = neural_output_batch[:, :cem.nvar_single]
+                lamda_init_nn_output = neural_output_batch[:, cem.nvar_single: 2*cem.nvar_single]
+                s_init_nn_output = neural_output_batch[:, 2*cem.nvar_single: 2*cem.nvar_single + num_total_constraints]
+
+                s_init_nn_output = torch.maximum( torch.zeros(( cem.num_batch, num_total_constraints ), device = device), s_init_nn_output)
+
+
+                cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean, xi_cov = cem.compute_cem(
                     xi_mean, data.qpos[:num_dof], data.qvel[:num_dof], 
-                    data.qacc[:num_dof], target_pos, target_rot
+                    data.qacc[:num_dof], target_pos, target_rot,
+                    lambda_init=lamda_init_nn_output, s_init=s_init_nn_output
                 )
                 
                 # Apply the control (use average of planned velocities)

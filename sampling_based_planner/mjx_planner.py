@@ -81,13 +81,10 @@ class cem_planner():
 		self.maxiter_projection = maxiter_projection
 		self.maxiter_cem = maxiter_cem
 
-		self.v_max = 0.8
-		self.a_max = 1.8
+		self.v_max = 1.0
+		self.a_max = 2.0
 		self.p_max = 180*np.pi/180
-  
-		self.l_1 = 1.0
-		self.l_2 = 1.0
-		self.l_3 = 1.0
+
 		self.ellite_num = int(self.num_elite*self.num_batch)
 
 		self.alpha_mean = 0.6
@@ -178,7 +175,7 @@ class cem_planner():
 		return b_eq_term
 
 	@partial(jax.jit, static_argnums=(0,))
-	def compute_projection(self, lamda_v, lamda_a, lamda_p, s_v, s_a, s_p,b_eq_term,  xi_samples):
+	def compute_projection(self, lamda_v, lamda_a, lamda_p, s_v, s_a, s_p, b_eq_term,  xi_samples):
   
 		v_max_temp = jnp.hstack(( self.v_max*jnp.ones((self.num_batch, self.num  )),  self.v_max*jnp.ones((self.num_batch, self.num  ))       ))
 		v_max_vec = jnp.tile(v_max_temp, (1, self.num_dof)  )
@@ -234,11 +231,13 @@ class cem_planner():
 		return primal_sol, s_v, s_a, s_p,  lamda_v, lamda_a, lamda_p, res_projection
 
 	@partial(jax.jit, static_argnums=(0,))
-	def compute_projection_filter(self, xi_samples, state_term):
+	def compute_projection_filter(self, xi_samples, state_term, lamda_init, s_init):
 
 		b_eq_term = self.compute_boundary_vec_batch(state_term)
 
 		# jax.debug.print("b_eq_term {}", jnp.shape(b_eq_term))
+
+		#Instead of zero, use MLP outputs as initial guesses
 		s_v = jnp.zeros((self.num_batch, 2*self.num_dof*self.num   ))
 		s_a = jnp.zeros((self.num_batch, 2*self.num_dof*self.num   ))
 		s_p = jnp.zeros((self.num_batch, 2*self.num_dof*self.num   ))
@@ -338,14 +337,15 @@ class cem_planner():
 		return mean_control, cov_control
 	
 	@partial(jax.jit, static_argnums=(0,))
-	def cem_iter(self, carry, _):
-		init_pos, init_vel, target_pos, target_rot, xi_mean, xi_cov, key, state_term = carry
+	def cem_iter(self, carry,  scan_over):
+
+		init_pos, init_vel, target_pos, target_rot, xi_mean, xi_cov, key, state_term, lamda_init, s_init = carry
 
 		xi_mean_prev = xi_mean 
 		xi_cov_prev = xi_cov
 
 		xi_samples, key = self.compute_xi_samples(key, xi_mean, xi_cov)
-		xi_filtered = self.compute_projection_filter(xi_samples, state_term)
+		xi_filtered = self.compute_projection_filter(xi_samples, state_term, lamda_init=lamda_init, s_init=s_init)
 
 		#jax.debug.print("filter to sample difference: {}", jnp.linalg.norm((xi_filtered - xi_samples), axis = 0))
 
@@ -365,18 +365,22 @@ class cem_planner():
 		xi_ellite, idx_ellite, cost_ellite = self.compute_ellite_samples(cost_batch, xi_samples)
 		xi_mean, xi_cov = self.compute_mean_cov(cost_ellite, xi_mean_prev, xi_cov_prev, xi_ellite)
 
-		carry = (init_pos, init_vel, target_pos, target_rot, xi_mean, xi_cov, key, state_term)
+		carry = (init_pos, init_vel, target_pos, target_rot, xi_mean, xi_cov, key, state_term, lamda_init, s_init)
 
 		return carry, (cost_batch, cost_g_batch, cost_r_batch, cost_c_batch, thetadot, theta)
 
+    #=jnp.array([1.5, -1.8, 1.75, -1.25, -1.6, 0]) 
 	@partial(jax.jit, static_argnums=(0,))
 	def compute_cem(
 		self, xi_mean, 
-		init_pos=jnp.array([1.5, -1.8, 1.75, -1.25, -1.6, 0]), 
-		init_vel=jnp.zeros(6), 
-		init_acc=jnp.zeros(6),
-		target_pos=jnp.zeros(3),
-		target_rot=jnp.zeros(4)
+		xi_cov,
+		init_pos, 
+		init_vel, 
+		init_acc,
+		target_pos,
+		target_rot,
+		lamda_init,
+		s_init,
 		):
 
 		theta_init = jnp.tile(init_pos, (self.num_batch, 1))
@@ -391,12 +395,13 @@ class cem_planner():
 		state_term = jnp.hstack((theta_init, thetadot_init, thetaddot_init, thetadot_fin, thetaddot_fin))
 		state_term = jnp.asarray(state_term)
 		
-		xi_cov = 10*jnp.identity(self.nvar)
+		
   
 		key, subkey = jax.random.split(self.key)
 
-		carry = (init_pos, init_vel, target_pos, target_rot, xi_mean, xi_cov, key, state_term)
+		carry = (init_pos, init_vel, target_pos, target_rot, xi_mean, xi_cov, key, state_term, lamda_init, s_init)
 		scan_over = jnp.array([0]*self.maxiter_cem)
+		
 		carry, out = jax.lax.scan(self.cem_iter, carry, scan_over, length=self.maxiter_cem)
 		cost_batch, cost_g_batch, cost_r_batch, cost_c_batch, thetadot, theta = out
 
@@ -411,8 +416,9 @@ class cem_planner():
 
 		#jax.debug.print("best_cost_g: {}", best_cost_g)
 		xi_mean = carry[4]
+		xi_cov = carry[5]
 
-		return cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean
+		return cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean, xi_cov
 	
 def main():
 	num_dof = 6

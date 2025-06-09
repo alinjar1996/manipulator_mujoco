@@ -319,7 +319,7 @@ def run_cem_planner(
                 s_init = jnp.zeros((cem.num_batch, cem.num_total_constraints))
                 lamda_init = jnp.zeros((cem.num_batch, cem.nvar))
 
-                cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean, xi_cov = cem.compute_cem(
+                cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean, xi_cov, _, _ = cem.compute_cem(
                     xi_mean, xi_cov, data.qpos[:num_dof], data.qvel[:num_dof], 
                     data.qacc[:num_dof], target_pos, target_rot,
                     lamda_init, s_init

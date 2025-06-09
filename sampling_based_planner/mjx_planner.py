@@ -87,6 +87,7 @@ class cem_planner():
 		self.A_control = jnp.vstack((
 			self.A_v_ineq,
 			self.A_a_ineq,
+			self.A_j_ineq,
 			self.A_p_ineq
 		))
   
@@ -124,7 +125,7 @@ class cem_planner():
 
 		self.num_vel_constraints = 2 * self.num * num_dof
 		self.num_acc_constraints = 2 * self.num_acc * num_dof
-		self.num_jerk_constraints = 0 #2 * self.num_jerk * num_dof
+		self.num_jerk_constraints = 2 * self.num_jerk * num_dof
 		self.num_pos_constraints = 2 * self.num_pos * num_dof
 		self.num_total_constraints = (self.num_vel_constraints + self.num_acc_constraints + 
 									 	self.num_jerk_constraints + self.num_pos_constraints)
@@ -217,7 +218,9 @@ class cem_planner():
 		return A_j_ineq, A_j
 	
 	def get_A_eq(self):
-		return np.kron(np.identity(self.num_dof), np.vstack((self.P[0], self.Pdot[0], self.Pddot[0], self.Pdot[-1], self.Pddot[-1]    )))
+		#return np.kron(np.identity(self.num_dof), np.vstack((self.P[0], self.Pdot[0], self.Pddot[0], self.Pdot[-1], self.Pddot[-1]    )))
+		#return np.kron(np.identity(self.num_dof), np.vstack((self.Pint[0], self.P[0], self.Pdot[0], self.P[-1], self.Pdot[-1]  )))
+		return np.kron(np.identity(self.num_dof), np.vstack((self.P[0], self.P[-1])))
 		#return np.kron(np.identity(self.num_dof), np.vstack((self.Pint[0], self.P[0] )))
 	
 	def get_Q_inv(self, A_eq):
@@ -230,16 +233,17 @@ class cem_planner():
 
 	@partial(jax.jit, static_argnums=(0,))
 	def compute_boundary_vec_single(self, state_term):
-		num_eq_constraint = 5 #jnp.shape(state_term)[1]
 
-		jax.debug.print("num_eq_constraint: {}", num_eq_constraint)
+		num_eq_constraint = int(jnp.shape(state_term)[0]/self.num_dof)
+
+		# jax.debug.print("num_eq_constraint: {}", num_eq_constraint)
 
 		b_eq_term = state_term.reshape( num_eq_constraint, self.num_dof).T
 		b_eq_term = b_eq_term.reshape(self.num_dof* num_eq_constraint)
 		return b_eq_term
 
 	@partial(jax.jit, static_argnums=(0,))
-	def compute_projection(self, lamda_init, s_init, b_eq_term, xi_samples):
+	def compute_projection(self, lamda_init, s_init, b_eq_term, xi_samples, init_pos):
 		b_vel = jnp.hstack((
 			self.v_max * jnp.ones((self.num_batch, self.num_vel_constraints // 2)),
 			self.v_max * jnp.ones((self.num_batch, self.num_vel_constraints // 2))
@@ -254,11 +258,28 @@ class cem_planner():
 			self.j_max * jnp.ones((self.num_batch, self.num_jerk_constraints // 2)),
 			self.j_max * jnp.ones((self.num_batch, self.num_jerk_constraints // 2))
 		))
-
-		b_pos = jnp.hstack((
-			self.p_max * jnp.ones((self.num_batch, self.num_pos_constraints // 2)),
-			self.p_max * jnp.ones((self.num_batch, self.num_pos_constraints // 2))
-		))
+        
+		init_pos_batch = jnp.tile(init_pos[None, :], (self.num_batch, 1))  # (num_batch, 6)
+        
+		# Calculate bounds for each joint and each batch
+    	# Upper bounds: p_max - init_pos, Lower bounds: p_max + init_pos (assuming symmetric limits)
+		b_pos_upper = (self.p_max - init_pos_batch)  # shape (num_batch, 6)
+		b_pos_lower = (self.p_max + init_pos_batch)  # shape (num_batch, 6)
+        
+		
+		# Expand to include time steps
+		b_pos_upper_expanded = jnp.tile(b_pos_upper[:, :, None], (1, 1, self.num_pos_constraints // (self.num_dof * 2)))  # (num_batch, 6, num_time_steps)
+		b_pos_lower_expanded = jnp.tile(b_pos_lower[:, :, None], (1, 1, self.num_pos_constraints // (self.num_dof * 2)))  # (num_batch, 6, num_time_steps)
+		
+		# Stack upper and lower bounds
+		b_pos_stacked = jnp.concatenate([b_pos_upper_expanded, b_pos_lower_expanded], axis=2)  # (num_batch, 6, 2*num_time_steps)
+		
+		# Reshape to final form: (num_batch, total_pos_constraints)
+		b_pos = b_pos_stacked.reshape((self.num_batch, -1))  # shape: (num_batch, self.num_pos_constraints)
+        
+		# jax.debug.print("b_vel: {}", b_vel.shape)
+		# jax.debug.print("b_pos: {}", b_pos.shape)
+		# jax.debug.print("b_acc: {}", b_acc.shape)
 
 		b_control = jnp.hstack((b_vel, b_acc, b_jerk, b_pos))
 
@@ -310,7 +331,7 @@ class cem_planner():
 
 
 	@partial(jax.jit, static_argnums=(0,))
-	def compute_projection_filter(self, xi_samples, state_term, lamda_init, s_init):
+	def compute_projection_filter(self, xi_samples, state_term, lamda_init, s_init, init_pos):
 
 		b_eq_term = self.compute_boundary_vec_batch(state_term)
 
@@ -338,7 +359,7 @@ class cem_planner():
 			
 			# Perform projection step
 			primal_sol, s, res_projection, lamda = self.compute_projection(
-				lamda, s, b_eq_term, xi_samples)
+				lamda, s, b_eq_term, xi_samples, init_pos)
 			
 			
 			# Compute residuals
@@ -461,7 +482,7 @@ class cem_planner():
 		xi_cov_prev = xi_cov
 
 		xi_samples, key = self.compute_xi_samples(key, xi_mean, xi_cov)
-		xi_filtered = self.compute_projection_filter(xi_samples, state_term, lamda_init=lamda_init, s_init=s_init)
+		xi_filtered = self.compute_projection_filter(xi_samples, state_term, lamda_init=lamda_init, s_init=s_init, init_pos=init_pos)
 
 		#jax.debug.print("filter to sample difference: {}", jnp.linalg.norm((xi_filtered - xi_samples), axis = 0))
 
@@ -510,9 +531,11 @@ class cem_planner():
 
 		# state_term = jnp.hstack((theta_init, thetadot_init, thetaddot_init, thetadot_fin, thetaddot_fin))
 
-		state_term = jnp.hstack((theta_init, thetadot_init, thetaddot_init, thetadot_fin, thetaddot_fin))
+		state_term = jnp.hstack((thetadot_init, thetadot_fin))
 
-		state_term = jnp.asarray(state_term)
+		# state_term = jnp.asarray(state_term)
+
+		# jax.debug.print("state_term.shape: {}", state_term.shape)
 		
 		
   
@@ -566,7 +589,7 @@ def main():
                     																				init_acc, target_pos, target_rot,
                     																				lamda_init, s_init)
 	
-	print(f"best_vels: {best_vels}")
+	#print(f"best_vels: {best_vels}")
 	print(f"Total time: {round(time.time()-start_time, 2)}s")
 	print(f"Compute CEM time: {round(time.time()-start_time_comp_cem, 2)}s")
     

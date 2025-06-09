@@ -205,10 +205,7 @@ class cem_planner():
                   self.rho_ineq * jnp.dot(self.A_a_ineq.T, self.A_a_ineq) + \
                   self.rho_ineq * jnp.dot(self.A_p_ineq.T, self.A_p_ineq)
 		
-		# jax.debug.print("Q {}", jnp.shape(Q_))
-		# jax.debug.print("A_projection {}", jnp.shape(self.A_projection))
-		# jax.debug.print("A_v_ineq {}", jnp.shape(self.A_v_ineq))
-		# jax.debug.print("A_a_ineq {}", jnp.shape(self.A_a_ineq))
+
         
 
 		primal_sol = sol[:, 0:self.nvar]
@@ -238,7 +235,7 @@ class cem_planner():
 
 		b_eq_term = self.compute_boundary_vec_batch(state_term)
 
-		jax.debug.print("b_eq_term {}", jnp.shape(b_eq_term))
+		# jax.debug.print("b_eq_term {}", jnp.shape(b_eq_term))
 		s_v = jnp.zeros((self.num_batch, 2*self.num_dof*self.num   ))
 		s_a = jnp.zeros((self.num_batch, 2*self.num_dof*self.num   ))
 		s_p = jnp.zeros((self.num_batch, 2*self.num_dof*self.num   ))
@@ -347,18 +344,13 @@ class cem_planner():
 		xi_samples, key = self.compute_xi_samples(key, xi_mean, xi_cov)
 		xi_filtered = self.compute_projection_filter(xi_samples, state_term)
 
-		#jax.debug.print("filter to sample difference: {}", jnp.linalg.norm((xi_filtered - xi_samples), axis = 0))
 
 		thetadot = jnp.dot(self.A_thetadot, xi_filtered.T).T
 
 
 		theta, eef_pos, eef_rot, collision = self.compute_rollout_batch(thetadot, init_pos, init_vel)
 
-		# jax.debug.print("theta has NaNs: {}", jnp.any(jnp.isnan(theta)))
-		# jax.debug.print("eef_pos has NaNs: {}", jnp.any(jnp.isnan(eef_pos)))
-		# jax.debug.print("eef_rot has NaNs: {}", jnp.any(jnp.isnan(eef_rot)))
-		# jax.debug.print("target_pos has NaNs: {}", jnp.any(jnp.isnan(target_pos)))
-		# jax.debug.print("target_rot has NaNs: {}", jnp.any(jnp.isnan(target_rot)))
+
 
 		cost_batch, cost_g_batch, cost_r_batch, cost_c_batch = self.compute_cost_batch(thetadot, eef_pos, eef_rot, collision, target_pos, target_rot)
 
@@ -409,7 +401,6 @@ class cem_planner():
 		best_cost_r = cost_r_batch[-1][idx_min]
 		best_cost_c = cost_c_batch[-1][idx_min]
 
-		#jax.debug.print("best_cost_g: {}", best_cost_g)
 		xi_mean = carry[4]
 
 		return cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean

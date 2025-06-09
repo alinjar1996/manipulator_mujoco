@@ -252,17 +252,7 @@ def run_cem_planner(
     target_idx = 0
     current_target = target_names[target_idx]
 
-    #Calculate number constraints
-    #calculating number of constraints
-    num_acc = cem.num - 1
-    num_jerk = num_acc - 1
-    num_pos = cem.num
-    num_vel_constraints = 2 * cem.num * num_dof
-    num_acc_constraints = 2 * num_acc * num_dof
-    num_jerk_constraints = 2 * num_jerk * num_dof
-    num_pos_constraints = 2 * num_pos * num_dof
-    num_total_constraints = (num_vel_constraints + num_acc_constraints + 
-                                num_jerk_constraints + num_pos_constraints)
+
     
     # Run the control loop
     if show_viewer:
@@ -305,9 +295,9 @@ def run_cem_planner(
                 rnn = 'LSTM'
 
                 inp_norm = robust_scale(inp)
-                model, neural_output_batch = load_mlp_projection_model(inp, inp_norm, rnn, 
-                                                                       num_total_constraints, cem.nvar_single, num_batch, num_dof, num_steps,
-                                                                       timestep, cem, maxiter_projection, device= device)
+                # model, neural_output_batch = load_mlp_projection_model(inp, inp_norm, rnn, 
+                #                                                        cem.num_total_constraints, cem.nvar_single, num_batch, num_dof, num_steps,
+                #                                                        timestep, cem, maxiter_projection, device= device)
 
                 # s_v = jnp.zeros((cem.num_batch, 2*cem.num_dof*cem.num   ))
                 # s_a = jnp.zeros((cem.num_batch, 2*cem.num_dof*cem.num   ))
@@ -318,23 +308,25 @@ def run_cem_planner(
 
                 
         
-                # For simplicity, use neural output as initial guess
-                # In practice, you might want to structure this differently
-                xi_projected_output_nn = neural_output_batch[:, :cem.nvar_single]
-                lamda_init_nn_output = neural_output_batch[:, cem.nvar_single: 2*cem.nvar_single]
-                s_init_nn_output = neural_output_batch[:, 2*cem.nvar_single: 2*cem.nvar_single + num_total_constraints]
+                # # For simplicity, use neural output as initial guess
+                # # In practice, you might want to structure this differently
+                # xi_projected_output_nn = neural_output_batch[:, :cem.nvar_single]
+                # lamda_init_nn_output = neural_output_batch[:, cem.nvar_single: 2*cem.nvar_single]
+                # s_init_nn_output = neural_output_batch[:, 2*cem.nvar_single: 2*cem.nvar_single + num_total_constraints]
 
-                s_init_nn_output = torch.maximum( torch.zeros(( cem.num_batch, num_total_constraints ), device = device), s_init_nn_output)
-
+                # s_init_nn_output = torch.maximum( torch.zeros(( cem.num_batch, num_total_constraints ), device = device), s_init_nn_output)
+                
+                s_init = jnp.zeros((cem.num_batch, cem.num_total_constraints))
+                lamda_init = jnp.zeros((cem.num_batch, cem.nvar))
 
                 cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean, xi_cov = cem.compute_cem(
-                    xi_mean, data.qpos[:num_dof], data.qvel[:num_dof], 
+                    xi_mean, xi_cov, data.qpos[:num_dof], data.qvel[:num_dof], 
                     data.qacc[:num_dof], target_pos, target_rot,
-                    lambda_init=lamda_init_nn_output, s_init=s_init_nn_output
+                    lamda_init, s_init
                 )
                 
                 # Apply the control (use average of planned velocities)
-                thetadot = np.mean(best_vels[1:num_steps-2], axis=0)
+                thetadot = np.mean(best_vels[1:num_steps], axis=0)
                 data.qvel[:num_dof] = thetadot
                 mujoco.mj_step(model, data)
 

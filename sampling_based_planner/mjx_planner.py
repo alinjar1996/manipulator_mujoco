@@ -403,7 +403,7 @@ class cem_planner():
 
 		xi_mean = carry[4]
 
-		return cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean
+		return cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean, thetadot, theta 
 	
 def main():
 	num_dof = 6

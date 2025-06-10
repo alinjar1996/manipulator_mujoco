@@ -4,6 +4,7 @@ xla_flags = os.environ.get('XLA_FLAGS', '')
 xla_flags += ' --xla_gpu_triton_gemm_any=True'
 os.environ['XLA_FLAGS'] = xla_flags
 
+
 import bernstein_coeff_order10_arbitinterval, bernstein_coeff_ordern_arbitinterval
 from functools import partial
 import numpy as np
@@ -12,6 +13,8 @@ import mujoco
 import mujoco.mjx as mjx 
 import jax
 import time
+jax.config.update("jax_enable_x64", True)
+
 
 
 class cem_planner():

@@ -490,18 +490,9 @@ class cem_planner():
 		xi_samples, key = self.compute_xi_samples(key, xi_mean, xi_cov)
 		xi_filtered = self.compute_projection_filter(xi_samples, state_term, lamda_init=lamda_init, s_init=s_init, init_pos=init_pos)
 
-		#jax.debug.print("filter to sample difference: {}", jnp.linalg.norm((xi_filtered - xi_samples), axis = 0))
-
 		thetadot = jnp.dot(self.A_thetadot, xi_filtered.T).T
 
-
 		theta, eef_pos, eef_rot, collision = self.compute_rollout_batch(thetadot, init_pos, init_vel)
-
-		# jax.debug.print("theta has NaNs: {}", jnp.any(jnp.isnan(theta)))
-		# jax.debug.print("eef_pos has NaNs: {}", jnp.any(jnp.isnan(eef_pos)))
-		# jax.debug.print("eef_rot has NaNs: {}", jnp.any(jnp.isnan(eef_rot)))
-		# jax.debug.print("target_pos has NaNs: {}", jnp.any(jnp.isnan(target_pos)))
-		# jax.debug.print("target_rot has NaNs: {}", jnp.any(jnp.isnan(target_rot)))
 
 		cost_batch, cost_g_batch, cost_r_batch, cost_c_batch = self.compute_cost_batch(thetadot, eef_pos, eef_rot, collision, target_pos, target_rot)
 

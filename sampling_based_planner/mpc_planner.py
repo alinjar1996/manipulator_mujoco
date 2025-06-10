@@ -338,8 +338,15 @@ def run_cem_planner(
                 rnn = 'GRU'
 
                 key = cem.key #jax.random.PRNGKey(42)
-                xi_samples_single, key = compute_xi_samples(key, xi_mean_single, xi_cov_single, cem.nvar_single, cem.num_batch)
-                xi_samples = jnp.tile(xi_samples_single, (1, cem.num_dof))
+                
+                # xi_samples_single, key = compute_xi_samples(key, xi_mean_single, xi_cov_single, cem.nvar_single, cem.num_batch)
+                
+                # xi_samples = jnp.tile(xi_samples_single, (1, cem.num_dof))
+
+                xi_samples, key = cem.compute_xi_samples(key, xi_mean, xi_cov)
+
+                xi_samples_reshaped = xi_samples.reshape(cem.num_batch, cem.num_dof, cem.nvar_single)
+
 
                 
 
@@ -354,6 +361,8 @@ def run_cem_planner(
 
                         # Goal Velocity is not used in current model
                         v_goal = np.tile(0.0, (num_batch,1))
+
+                        xi_samples_single = xi_samples_reshaped[:, i, :]   # i-th DOF
 
                         inp = np.hstack([xi_samples_single, theta_init, v_start, v_goal])
 

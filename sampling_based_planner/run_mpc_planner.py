@@ -41,6 +41,8 @@ results = run_cem_planner(
 
     #Inference MLP for lamda_init and s_init
     inference=True,
+    #rnn = 'GRU',
+    rnn = 'LSTM',
 
     #Stop at final target
     stop_at_final_target=True 

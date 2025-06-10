@@ -113,7 +113,7 @@ class cem_planner():
 		self.maxiter_cem = maxiter_cem
 
 		self.v_max = 2.0
-		self.a_max = 4.0
+		self.a_max = 5.0
 		self.j_max = 10.0
 		self.p_max = 180*np.pi/180
 

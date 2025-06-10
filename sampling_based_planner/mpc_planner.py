@@ -173,7 +173,10 @@ def run_cem_planner(
     data_dir=None,
     # Motion control
     stop_at_final_target=None,
+
+    #MLP related
     inference = None,
+    rnn = None
 ):
     """
     Run CEM planner with configurable parameters
@@ -335,7 +338,7 @@ def run_cem_planner(
 
                 #xi_samples, key = compute_xi_samples(key, xi_mean, xi_cov, cem.nvar, cem.num_batch)
                 
-                rnn = 'GRU'
+                
 
                 key = cem.key #jax.random.PRNGKey(42)
                 
@@ -407,7 +410,7 @@ def run_cem_planner(
                 )
                 
                 # Apply the control (use average of planned velocities)
-                thetadot = np.mean(best_vels[1:num_steps], axis=0)
+                thetadot = np.mean(best_vels[1:int(num_steps*0.9)], axis=0)
                 data.qvel[:num_dof] = thetadot
                 mujoco.mj_step(model, data)
 

@@ -353,28 +353,24 @@ def run_cem_planner(
                 if inference:
 
                     for i in range(cem.num_dof):
-                        theta_init = data.qpos[i]
-                        v_start = data.qvel[i]
+
 
                         theta_init = np.tile(data.qpos[i], (num_batch,1))
                         v_start = np.tile(data.qvel[i], (num_batch,1)) 
 
-                        # Goal Velocity is not used in current model
-                        v_goal = np.tile(0.0, (num_batch,1))
+
 
                         xi_samples_single = xi_samples_reshaped[:, i, :]   # i-th DOF
 
-                        inp = np.hstack([xi_samples_single, theta_init, v_start, v_goal])
+                        inp = np.hstack([xi_samples_single, theta_init, v_start])
 
 
                         # xi_samples_single_torch = torch.from_numpy(xi_samples_single).float().to(device)
                         # theta_init_torch = torch.from_numpy(theta_init).float().to(device)
                         # v_start_torch = torch.from_numpy(v_start).float().to(device)
-                        # v_goal_torch = torch.from_numpy(v_goal).float().to(device)
 
                         inp_torch = torch.tensor(inp).float().to(device)
 
-                        # inp_torch = torch.hstack((xi_samples_single_torch, theta_init_torch, v_start_torch, v_goal_torch))
 
                         inp_norm_torch = robust_scale(inp_torch)
 

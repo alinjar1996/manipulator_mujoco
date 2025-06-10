@@ -40,7 +40,7 @@ results = run_cem_planner(
     data_dir='custom_data',
 
     #Inference MLP for lamda_init and s_init
-    inference=False,
+    inference=True,
 
     #Stop at final target
     stop_at_final_target=True 

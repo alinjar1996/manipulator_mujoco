@@ -220,7 +220,7 @@ class cem_planner():
 	def get_A_eq(self):
 		#return np.kron(np.identity(self.num_dof), np.vstack((self.P[0], self.Pdot[0], self.Pddot[0], self.Pdot[-1], self.Pddot[-1]    )))
 		#return np.kron(np.identity(self.num_dof), np.vstack((self.Pint[0], self.P[0], self.Pdot[0], self.P[-1], self.Pdot[-1]  )))
-		return np.kron(np.identity(self.num_dof), np.vstack((self.P[0], self.P[-1])))
+		return np.kron(np.identity(self.num_dof), self.P[0])
 		#return np.kron(np.identity(self.num_dof), np.vstack((self.Pint[0], self.P[0] )))
 	
 	def get_Q_inv(self, A_eq):
@@ -531,7 +531,9 @@ class cem_planner():
 
 		# state_term = jnp.hstack((theta_init, thetadot_init, thetaddot_init, thetadot_fin, thetaddot_fin))
 
-		state_term = jnp.hstack((thetadot_init, thetadot_fin))
+		#state_term = jnp.hstack((thetadot_init, thetadot_fin))
+
+		state_term = thetadot_init	
 
 		# state_term = jnp.asarray(state_term)
 

@@ -14,7 +14,7 @@ results = run_cem_planner(
     
     maxiter_cem=1,      # CEM iterations: Use More iterations for better convergence     
     maxiter_projection=20,   # Projection Filter iterations: Use More iterations for better Filtering
-    w_pos=20.0,      # weight on position error
+    w_pos=40.0,      # weight on position error
     w_rot=3.0,       # weight on rotation error
     w_col=80.0,      # weight on collision avoidance
     
@@ -32,7 +32,7 @@ results = run_cem_planner(
     cam_distance=4,  # View 
     
     # Convergence thresholds
-    position_threshold=0.05*2,  # Stricter position convergence Better for more complex tasks
+    position_threshold=0.05,  # Stricter position convergence Better for more complex tasks
     rotation_threshold=0.1,   # Stricter rotation convergence Better for more complex tasks
     
     # Save data

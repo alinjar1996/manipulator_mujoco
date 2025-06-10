@@ -7,13 +7,13 @@ from mpc_planner import run_cem_planner
 results = run_cem_planner(
     # CEM parameters
     num_dof=6,
-    num_batch=1000,  # Use More samples for better optimization
-    num_steps=16,     # Use More steps for longer planning horizon
+    num_batch=500,  # Use More samples for better optimization
+    num_steps=50,     # Use More steps for longer planning horizon
     num_elite=0.05,   # Use More elite samples for better convergence #Int(num_elite*num_batch) is used to select elite samples
     timestep=0.05,     # Simulation Time Step Use Smaller timestep for more accurate simulation
     
     maxiter_cem=1,      # CEM iterations: Use More iterations for better convergence     
-    maxiter_projection=20,   # Projection Filter iterations: Use More iterations for better Filtering
+    maxiter_projection=1,   # Projection Filter iterations: Use More iterations for better Filtering
     w_pos=20.0,      # weight on position error
     w_rot=3.0,       # weight on rotation error
     w_col=80.0,      # weight on collision avoidance
@@ -38,6 +38,9 @@ results = run_cem_planner(
     # Save data
     save_data=True,
     data_dir='custom_data',
+
+    #Inference MLP for lamda_init and s_init
+    inference=True,
 
     #Stop at final target
     stop_at_final_target=True 

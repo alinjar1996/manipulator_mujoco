@@ -22,28 +22,32 @@ import torch.optim as optim
 
 from torch.utils.data import Dataset, DataLoader
 
+import contextlib
+from io import StringIO
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using {device} device")
 
-def robust_scale(input_nn: jnp.ndarray) -> jnp.ndarray:
+def robust_scale(input_nn: torch.Tensor) -> torch.Tensor:
     """
     Normalize input using median and IQR (Robust scaling).
     
     Args:
-        input_nn (jnp.ndarray): Input data of shape (batch_size, features)
-
+        input_nn (torch.Tensor): Input data of shape (batch_size, features)
+     
     Returns:
-        inp_norm (jnp.ndarray): Robustly normalized data
+        inp_norm (torch.Tensor): Robustly normalized data
     """
-    inp_median_ = jnp.median(input_nn, axis=0)
-    inp_q1 = jnp.quantile(input_nn, 0.25, axis=0)
-    inp_q3 = jnp.quantile(input_nn, 0.75, axis=0)
+    inp_median_ = torch.median(input_nn, dim=0).values
+    inp_q1 = torch.quantile(input_nn, 0.25, dim=0)
+    inp_q3 = torch.quantile(input_nn, 0.75, dim=0)
     inp_iqr_ = inp_q3 - inp_q1
-
+    
     # Handle constant features (IQR = 0)
-    inp_iqr_ = jnp.where(inp_iqr_ == 0, 1.0, inp_iqr_)
-
+    inp_iqr_ = torch.where(inp_iqr_ == 0, 1.0, inp_iqr_)
+    
     inp_norm = (input_nn - inp_median_) / inp_iqr_
+
     return inp_norm
 
 @partial(jax.jit, static_argnames=['nvar', 'num_batch'])
@@ -53,27 +57,26 @@ def compute_xi_samples(key, xi_mean, xi_cov, nvar, num_batch ):
     return xi_samples, key
 
 def load_mlp_projection_model(
-    inp, inp_norm, rnn_type, num_total_constraints, nvar, num_batch, num_dof, num_steps,
-    timestep, cem, maxiter_projection, device='cuda'):
+    inp, inp_norm, rnn_type, cem, maxiter_projection, device='cuda'):
 
     enc_inp_dim = np.shape(inp)[1]
     mlp_inp_dim = enc_inp_dim
     hidden_dim = 1024
-    mlp_out_dim = 2 * nvar + num_total_constraints
+    mlp_out_dim = 2 * cem.nvar_single + cem.num_total_constraints_per_dof
 
     if rnn_type == "GRU":
-        print("Training with GRU")
-        rnn_input_size = 3 * num_total_constraints + 3 * nvar
+        # print("Inferencing with GRU")
+        rnn_input_size = 3 * cem.num_total_constraints_per_dof + 3 * cem.nvar_single
         rnn_hidden_size = 512
-        rnn_output_size = num_total_constraints + nvar
+        rnn_output_size = cem.num_total_constraints_per_dof + cem.nvar_single
         rnn_context = CustomGRULayer(rnn_input_size, rnn_hidden_size, rnn_output_size)
         rnn_init = GRU_Hidden_State(mlp_inp_dim, rnn_hidden_size, rnn_hidden_size)
 
     elif rnn_type == "LSTM":
-        print("Training with LSTM")
-        rnn_input_size = 3 * num_total_constraints + 3 * nvar
+        # print("Inferencing with LSTM")
+        rnn_input_size = 3 * cem.num_total_constraints_per_dof + 3 * cem.nvar_single
         rnn_hidden_size = 512
-        rnn_output_size = num_total_constraints + nvar
+        rnn_output_size = cem.num_total_constraints_per_dof + cem.nvar_single
         rnn_context = CustomLSTMLayer(rnn_input_size, rnn_hidden_size, rnn_output_size)
         rnn_init = LSTM_Hidden_State(mlp_inp_dim, rnn_hidden_size, rnn_hidden_size)
 
@@ -81,36 +84,66 @@ def load_mlp_projection_model(
         raise ValueError(f"Unsupported RNN type: {rnn_type}")
 
     mlp = MLP(mlp_inp_dim, hidden_dim, mlp_out_dim)
+    # Suppress output during model creation
+    with contextlib.redirect_stdout(StringIO()):
+        model = MLPProjectionFilter(
+            mlp=mlp,
+            rnn_context=rnn_context,
+            rnn_init=rnn_init,
+            num_batch=cem.num_batch,
+            num_dof=cem.num_dof,
+            num_steps=cem.num, #Same as num_steps in cem_planner
+            timestep=cem.t, #Same as timestep in cem_planner
+            v_max=cem.v_max,
+            a_max=cem.a_max,
+            j_max=cem.j_max,
+            p_max=cem.p_max,
+            maxiter_projection=maxiter_projection,
+            rnn=rnn_type
+        ).to(device)
 
-    model = MLPProjectionFilter(
-        mlp=mlp,
-        rnn_context=rnn_context,
-        rnn_init=rnn_init,
-        num_batch=num_batch,
-        num_dof=num_dof,
-        num_steps=num_steps,
-        timestep=timestep,
-        v_max=cem.v_max,
-        a_max=cem.a_max,
-        j_max=5.0,
-        p_max=cem.p_max,
-        maxiter_projection=maxiter_projection,
-        rnn=rnn_type
-    ).to(device)
-
-    print(f"Model type: {type(model)}")
+        # print(f"Model type: {type(model)}")  
+        current_working_directory = os.getcwd()
+        print(current_working_directory)
+        
+        weight_path = f'./training_weights/mlp_learned_single_dof_{rnn_type}.pth'
+        model.load_state_dict(torch.load(weight_path, weights_only=True))
+        model.eval()
     
-    current_working_directory = os.getcwd()
-    print(current_working_directory)
+        # Run forward pass
+        neural_output_batch = model.mlp(inp_norm)
+
+    return neural_output_batch
+
+
+
+def append_torch_tensors(variable_single_dof, variable_multi_dof):
+    # Debug the input shapes
     
-    weight_path = f'./training_weights/mlp_learned_single_dof_{rnn_type}.pth'
-    model.load_state_dict(torch.load(weight_path, weights_only=True))
-    model.eval()
+    # Debug the list contents
+    if isinstance(variable_multi_dof, list):
+        # print(f"List length: {len(variable_multi_dof)}")
+        # for i, item in enumerate(variable_multi_dof):
+            # print(f"Item {i}: type={type(item)}, shape={getattr(item, 'shape', 'no shape')}")
+        
+        # If list is empty, return the single tensor as-is (first DOF)
+        if len(variable_multi_dof) == 0:
+            return variable_single_dof
+        else:
+            # Stack existing list items and then concatenate
+            variable_multi_dof = torch.stack(variable_multi_dof, dim=0)
+    
+    # Debug the multi_dof tensor shape
+    # print(f"variable_multi_dof shape: {variable_multi_dof.shape}")
+    
+    # At this point, variable_multi_dof should be a tensor
+    # Concatenate along dimension 1 (features/variables dimension)
+    variable_multi_dof = torch.cat([variable_multi_dof, variable_single_dof], dim=1)
+    
+    # print(f"Result shape: {variable_multi_dof.shape}")
+    return variable_multi_dof
 
-    # Run forward pass
-    neural_output_batch = model.mlp(inp_norm)
 
-    return model, neural_output_batch
 
 def run_cem_planner(
     # CEM planner parameters
@@ -139,7 +172,8 @@ def run_cem_planner(
     save_data=None,
     data_dir=None,
     # Motion control
-    stop_at_final_target=None
+    stop_at_final_target=None,
+    inference = None,
 ):
     """
     Run CEM planner with configurable parameters
@@ -218,12 +252,19 @@ def run_cem_planner(
     xi_mean_single = jnp.zeros(cem.nvar_single)
     xi_cov_single = 10*jnp.identity(cem.nvar_single)
 
-    xi_mean = jnp.zeros((cem.nvar))
-    xi_cov = 10*jnp.identity(cem.nvar)
+    xi_mean = jnp.tile(xi_mean_single, cem.num_dof)
+    xi_cov = jnp.kron(jnp.eye(cem.num_dof), xi_cov_single)
+
+    # key = cem.key #jax.random.PRNGKey(42)
+    # xi_samples_single, key = compute_xi_samples(key, xi_mean_single, xi_cov_single, cem.nvar_single, cem.num_batch)
+    # xi_samples = jnp.tile(xi_samples_single, (1, cem.num_dof))
+
+    # xi_mean = jnp.zeros((cem.nvar))
+    # xi_cov = 10*jnp.identity(cem.nvar)
 
     #Initialize lamda and s
-    lamda_init = jnp.zeros(( cem.num_batch, 3*cem.nvar_single  ))
-    s_init = jnp.zeros((cem.num_batch, 6*cem.num))
+    lamda_init = jnp.zeros(( cem.num_batch, cem.nvar  ))
+    s_init = jnp.zeros((cem.num_batch, cem.num_total_constraints))
 
     
     # Get initial end-effector position and orientation
@@ -253,6 +294,9 @@ def run_cem_planner(
     current_target = target_names[target_idx]
 
 
+
+
+
     
     # Run the control loop
     if show_viewer:
@@ -261,6 +305,10 @@ def run_cem_planner(
             viewer_.opt.flags[mujoco.mjtVisFlag.mjVIS_CONTACTPOINT] = show_contact_points
             
             while viewer_.is_running():
+
+                xi_projected_nn_output = [] #jnp.zeros((cem.num_batch, cem.nvar))
+                lamda_init_nn_output = [] #jnp.zeros((cem.num_batch, cem.nvar))
+                s_init_nn_output = [] #jnp.zeros((cem.num_batch, cem.num_total_constraints))
                 # Time the step
                 start_time = time.time()
                 
@@ -284,40 +332,68 @@ def run_cem_planner(
                  
                 #rnn_inference(rnn_type="LSTM", model_weights_path=None, dataset_size=1000):
 
-                key = jax.random.PRNGKey(42)
+
+                #xi_samples, key = compute_xi_samples(key, xi_mean, xi_cov, cem.nvar, cem.num_batch)
+                
+                rnn = 'GRU'
+
+                key = cem.key #jax.random.PRNGKey(42)
                 xi_samples_single, key = compute_xi_samples(key, xi_mean_single, xi_cov_single, cem.nvar_single, cem.num_batch)
-                theta_init = jnp.array([0.0]*cem.num_batch).reshape(-1, 1)
-                v_start = jnp.array([0.0]*cem.num_batch).reshape(-1, 1)
-                v_goal = jnp.array([0.0]*cem.num_batch).reshape(-1, 1)
-
-                inp = jnp.hstack([xi_samples_single, theta_init, v_start, v_goal])
-
-                rnn = 'LSTM'
-
-                inp_norm = robust_scale(inp)
-                # model, neural_output_batch = load_mlp_projection_model(inp, inp_norm, rnn, 
-                #                                                        cem.num_total_constraints, cem.nvar_single, num_batch, num_dof, num_steps,
-                #                                                        timestep, cem, maxiter_projection, device= device)
-
-                # s_v = jnp.zeros((cem.num_batch, 2*cem.num_dof*cem.num   ))
-                # s_a = jnp.zeros((cem.num_batch, 2*cem.num_dof*cem.num   ))
-                # s_p = jnp.zeros((cem.num_batch, 2*cem.num_dof*cem.num   ))
-                # lamda_v = jnp.zeros(( cem.num_batch, cem.nvar  ))
-                # lamda_a = jnp.zeros(( cem.num_batch, cem.nvar  ))
-                # lamda_p = jnp.zeros(( cem.num_batch, cem.nvar  ))
+                xi_samples = jnp.tile(xi_samples_single, (1, cem.num_dof))
 
                 
-        
-                # # For simplicity, use neural output as initial guess
-                # # In practice, you might want to structure this differently
-                # xi_projected_output_nn = neural_output_batch[:, :cem.nvar_single]
-                # lamda_init_nn_output = neural_output_batch[:, cem.nvar_single: 2*cem.nvar_single]
-                # s_init_nn_output = neural_output_batch[:, 2*cem.nvar_single: 2*cem.nvar_single + num_total_constraints]
 
-                # s_init_nn_output = torch.maximum( torch.zeros(( cem.num_batch, num_total_constraints ), device = device), s_init_nn_output)
-                
-                s_init = jnp.zeros((cem.num_batch, cem.num_total_constraints))
-                lamda_init = jnp.zeros((cem.num_batch, cem.nvar))
+                if inference:
+
+                    for i in range(cem.num_dof):
+                        theta_init = data.qpos[i]
+                        v_start = data.qvel[i]
+
+                        theta_init = np.tile(data.qpos[i], (num_batch,1))
+                        v_start = np.tile(data.qvel[i], (num_batch,1)) 
+
+                        # Goal Velocity is not used in current model
+                        v_goal = np.tile(0.0, (num_batch,1))
+
+                        inp = np.hstack([xi_samples_single, theta_init, v_start, v_goal])
+
+
+                        # xi_samples_single_torch = torch.from_numpy(xi_samples_single).float().to(device)
+                        # theta_init_torch = torch.from_numpy(theta_init).float().to(device)
+                        # v_start_torch = torch.from_numpy(v_start).float().to(device)
+                        # v_goal_torch = torch.from_numpy(v_goal).float().to(device)
+
+                        inp_torch = torch.tensor(inp).float().to(device)
+
+                        # inp_torch = torch.hstack((xi_samples_single_torch, theta_init_torch, v_start_torch, v_goal_torch))
+
+                        inp_norm_torch = robust_scale(inp_torch)
+
+                        
+                        neural_output_batch = load_mlp_projection_model(inp_torch, inp_norm_torch, rnn, cem, maxiter_projection, device= device)
+                        
+                        xi_projected_nn_output_single = neural_output_batch[:, :cem.nvar_single]
+                        lamda_init_nn_output_single = neural_output_batch[:, cem.nvar_single: 2*cem.nvar_single]
+                        s_init_nn_output_single = neural_output_batch[:, 2*cem.nvar_single: 2*cem.nvar_single + cem.num_total_constraints_per_dof]
+
+                        s_init_nn_output_single = torch.maximum( torch.zeros(( cem.num_batch, 
+                                                                              cem.num_total_constraints_per_dof ), device = device), s_init_nn_output_single)
+                        
+                        
+                        xi_projected_nn_output = append_torch_tensors(xi_projected_nn_output_single, xi_projected_nn_output)
+                        lamda_init_nn_output = append_torch_tensors(lamda_init_nn_output_single, lamda_init_nn_output)
+                        s_init_nn_output = append_torch_tensors(s_init_nn_output_single, s_init_nn_output)
+                        
+                        
+                     
+                    lamda_init = np.array(lamda_init_nn_output.cpu().detach().numpy())
+                        
+                    #lamda_init_nn_output   #jnp.zeros((cem.num_batch, cem.nvar))
+                        
+                    s_init = np.array(s_init_nn_output.cpu().detach().numpy())
+                        
+                    #s_init_nn_output   #jnp.zeros((cem.num_batch, cem.num_total_constraints))
+
 
                 cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean, xi_cov, _, _ = cem.compute_cem(
                     xi_mean, xi_cov, data.qpos[:num_dof], data.qvel[:num_dof], 

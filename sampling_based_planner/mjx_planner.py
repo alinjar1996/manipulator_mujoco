@@ -13,7 +13,7 @@ import mujoco
 import mujoco.mjx as mjx 
 import jax
 import time
-jax.config.update("jax_enable_x64", True)
+#jax.config.update("jax_enable_x64", True)
 
 
 
@@ -122,16 +122,19 @@ class cem_planner():
 		
 		    
     	#calculating number of Inequality constraints
+		self.num_vel = self.num
 		self.num_acc = self.num - 1
 		self.num_jerk = self.num - 2
 		self.num_pos = self.num
 
-		self.num_vel_constraints = 2 * self.num * num_dof
+		self.num_vel_constraints = 2 * self.num_vel * num_dof
 		self.num_acc_constraints = 2 * self.num_acc * num_dof
 		self.num_jerk_constraints = 2 * self.num_jerk * num_dof
 		self.num_pos_constraints = 2 * self.num_pos * num_dof
 		self.num_total_constraints = (self.num_vel_constraints + self.num_acc_constraints + 
 									 	self.num_jerk_constraints + self.num_pos_constraints)
+		
+		self.num_total_constraints_per_dof = 2*(self.num_vel + self.num_acc + self.num_jerk + self.num_pos)
 
 		self.ellite_num = int(self.num_elite*self.num_batch)
 
@@ -180,6 +183,9 @@ class cem_planner():
 			f'\n Number of batches: {self.num_batch}',
 			f'\n Number of steps per trajectory: {self.num}',
 			f'\n Time per trajectory: {self.t_fin}',
+			f'\n Number of variables: {self.nvar}',
+			f'\n Number of Total constraints: {self.num_total_constraints}',
+
 		)
 
 
@@ -349,9 +355,6 @@ class cem_planner():
 		# lamda_v = jnp.zeros(( self.num_batch, self.nvar  ))
 		# lamda_a = jnp.zeros(( self.num_batch, self.nvar  ))
  		# lamda_p = jnp.zeros(( self.num_batch, self.nvar  ))
-
-		s_init = jnp.zeros((self.num_batch, self.num_total_constraints))
-		lamda_init = jnp.zeros((self.num_batch, self.nvar))
 		#Define scan function (following original structure)
 		def lax_custom_projection(carry, idx):
 

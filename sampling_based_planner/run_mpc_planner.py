@@ -3,18 +3,18 @@ import numpy as np
 from mpc_planner import run_cem_planner
 
 
-inference = True
+inference = False
 #Customized parameters
 results = run_cem_planner(
     # CEM parameters
     num_dof=6,
     num_batch=1000,  # Use More samples for better optimization
-    num_steps=50,     # Use More steps for longer planning horizon
+    num_steps=20,     # Use More steps for longer planning horizon
     num_elite=0.05,   # Use More elite samples for better convergence #Int(num_elite*num_batch) is used to select elite samples
     timestep=0.05,     # Simulation Time Step Use Smaller timestep for more accurate simulation
     
     maxiter_cem=1,      # CEM iterations: Use More iterations for better convergence     
-    maxiter_projection=1,   # Projection Filter iterations: Use More iterations for better Filtering
+    maxiter_projection=3,   # Projection Filter iterations: Use More iterations for better Filtering
     w_pos=20.0,      # weight on position error
     w_rot=3.0,       # weight on rotation error
     w_col=80.0,      # weight on collision avoidance
@@ -31,9 +31,9 @@ results = run_cem_planner(
 
     #Joint limits
     max_joint_pos= 180.0*np.pi/180.0,
-    max_joint_vel= 2.0,
-    max_joint_acc= 5.0,
-    max_joint_jerk= 10.0,
+    max_joint_vel= 1.0,
+    max_joint_acc= 2.0,
+    max_joint_jerk= 4.0,
     
     # Visualization
     cam_distance=4,  # View 

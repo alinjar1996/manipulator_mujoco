@@ -13,9 +13,7 @@ import argparse
 
 from functools import partial
 
-from mlp_inference import rnn_inference
-from RNN.mlp_singledof_rnn import MLP, MLPProjectionFilter, CustomGRULayer, GRU_Hidden_State, CustomLSTMLayer, LSTM_Hidden_State
-
+from Simple_MLP.mlp_singledof import MLP, MLPProjectionFilter
 import torch 
 import torch.nn as nn 
 import torch.optim as optim
@@ -64,32 +62,12 @@ def load_mlp_projection_model(
     hidden_dim = 1024
     mlp_out_dim = 2 * cem.nvar_single + cem.num_total_constraints_per_dof
 
-    if rnn_type == "GRU":
-        # print("Inferencing with GRU")
-        rnn_input_size = 3 * cem.num_total_constraints_per_dof + 3 * cem.nvar_single
-        rnn_hidden_size = 512
-        rnn_output_size = cem.num_total_constraints_per_dof + cem.nvar_single
-        rnn_context = CustomGRULayer(rnn_input_size, rnn_hidden_size, rnn_output_size)
-        rnn_init = GRU_Hidden_State(mlp_inp_dim, rnn_hidden_size, rnn_hidden_size)
-
-    elif rnn_type == "LSTM":
-        # print("Inferencing with LSTM")
-        rnn_input_size = 3 * cem.num_total_constraints_per_dof + 3 * cem.nvar_single
-        rnn_hidden_size = 512
-        rnn_output_size = cem.num_total_constraints_per_dof + cem.nvar_single
-        rnn_context = CustomLSTMLayer(rnn_input_size, rnn_hidden_size, rnn_output_size)
-        rnn_init = LSTM_Hidden_State(mlp_inp_dim, rnn_hidden_size, rnn_hidden_size)
-
-    else:
-        raise ValueError(f"Unsupported RNN type: {rnn_type}")
 
     mlp = MLP(mlp_inp_dim, hidden_dim, mlp_out_dim)
     # Suppress output during model creation
     with contextlib.redirect_stdout(StringIO()):
         model = MLPProjectionFilter(
             mlp=mlp,
-            rnn_context=rnn_context,
-            rnn_init=rnn_init,
             num_batch=cem.num_batch,
             num_dof=cem.num_dof,
             num_steps=cem.num, #Same as num_steps in cem_planner
@@ -99,14 +77,13 @@ def load_mlp_projection_model(
             j_max=cem.j_max,
             p_max=cem.p_max,
             maxiter_projection=maxiter_projection,
-            rnn=rnn_type
         ).to(device)
 
         # print(f"Model type: {type(model)}")  
         current_working_directory = os.getcwd()
         print(current_working_directory)
         
-        weight_path = f'./training_weights/mlp_learned_single_dof_{rnn_type}.pth'
+        weight_path = f'./training_weights/mlp_learned_single_dof.pth'
         model.load_state_dict(torch.load(weight_path, weights_only=True))
         model.eval()
     
@@ -339,7 +316,6 @@ def run_cem_planner(
                     # Pass raw sample through to Network
                     #Raw sample and initialize
                     
-                    #rnn_inference(rnn_type="LSTM", model_weights_path=None, dataset_size=1000):
                     
                     
                     # xi_samples = jnp.tile(xi_samples_single, (1, cem.num_dof))

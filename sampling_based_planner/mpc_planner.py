@@ -57,9 +57,9 @@ def compute_xi_samples(key, xi_mean, xi_cov, nvar, num_batch ):
     return xi_samples, key
 
 def load_mlp_projection_model(
-    inp, inp_norm, rnn_type, cem, maxiter_projection, device='cuda'):
+    num_feature, rnn_type, cem, maxiter_projection, device='cuda'):
 
-    enc_inp_dim = np.shape(inp)[1]
+    enc_inp_dim = num_feature #np.shape(inp)[1]
     mlp_inp_dim = enc_inp_dim
     hidden_dim = 1024
     mlp_out_dim = 2 * cem.nvar_single + cem.num_total_constraints_per_dof
@@ -111,9 +111,9 @@ def load_mlp_projection_model(
         model.eval()
     
         # Run forward pass
-        neural_output_batch = model.mlp(inp_norm)
+        #neural_output_batch = model.mlp(inp_norm)
 
-    return neural_output_batch
+    return model
 
 
 
@@ -266,12 +266,7 @@ def run_cem_planner(
     xi_mean = jnp.tile(xi_mean_single, cem.num_dof)
     xi_cov = jnp.kron(jnp.eye(cem.num_dof), xi_cov_single)
 
-    # key = cem.key #jax.random.PRNGKey(42)
-    # xi_samples_single, key = compute_xi_samples(key, xi_mean_single, xi_cov_single, cem.nvar_single, cem.num_batch)
-    # xi_samples = jnp.tile(xi_samples_single, (1, cem.num_dof))
-
-    # xi_mean = jnp.zeros((cem.nvar))
-    # xi_cov = 10*jnp.identity(cem.nvar)
+    xi_samples, key = cem.compute_xi_samples(cem.key, xi_mean, xi_cov)
 
     #Initialize lamda and s
     lamda_init = jnp.zeros(( cem.num_batch, cem.nvar  ))
@@ -288,7 +283,8 @@ def run_cem_planner(
 
     # Warm-up computation
     start_time = time.time()
-    _ = cem.compute_cem(xi_mean, xi_cov, data.qpos[:num_dof], data.qvel[:num_dof], data.qacc[:num_dof], target_pos, target_rot, lamda_init, s_init)
+    _ = cem.compute_cem(xi_mean, xi_cov, data.qpos[:num_dof], data.qvel[:num_dof], data.qacc[:num_dof], target_pos, target_rot, lamda_init, s_init
+                        , xi_samples)
     print(f"Compute CEM: {round(time.time()-start_time, 2)}s")
 
     # Initialize variables for data collection
@@ -303,189 +299,189 @@ def run_cem_planner(
     # Current target index
     target_idx = 0
     current_target = target_names[target_idx]
-
-
-
-
-
     
+    #Number of features
+    num_feature = num_steps + 1 + 1 #joint vel for all timestep + theta_init + v_start
+    mlp_model = load_mlp_projection_model(num_feature, rnn, cem, maxiter_projection, device= device)
+
+    timestep_counter = 0
     # Run the control loop
     if show_viewer:
         with viewer.launch_passive(model, data) as viewer_:
             viewer_.cam.distance = cam_distance
             viewer_.opt.flags[mujoco.mjtVisFlag.mjVIS_CONTACTPOINT] = show_contact_points
             
-            while viewer_.is_running():
+            try:
+                while viewer_.is_running():
 
-                xi_projected_nn_output = [] #jnp.zeros((cem.num_batch, cem.nvar))
-                lamda_init_nn_output = [] #jnp.zeros((cem.num_batch, cem.nvar))
-                s_init_nn_output = [] #jnp.zeros((cem.num_batch, cem.num_total_constraints))
-                # Time the step
-                start_time = time.time()
-                
-                # Determine target position and orientation
-                if current_target != "home":
-                    target_pos = model.body(name=current_target).pos
-                    target_rot = model.body(name=current_target).quat
-                else:
-                    target_pos = init_position
-                    target_rot = init_rotation
-
-                # Special case for target_1 (moving target with end-effector)
-                if current_target == "target_1" and "target_0" in target_names:
-                    model.body(name="target_0").pos = data.site_xpos[cem.tcp_id]
-                    model.body(name="target_0").quat = data.xquat[cem.hande_id]
-
-                # Compute CEM control
-                # Compute raw samples from mean and covariance
-                # Pass raw sample through to Network
-                #Raw sample and initialize
-                 
-                #rnn_inference(rnn_type="LSTM", model_weights_path=None, dataset_size=1000):
-
-
-                #xi_samples, key = compute_xi_samples(key, xi_mean, xi_cov, cem.nvar, cem.num_batch)
-                
-                
-
-                key = cem.key #jax.random.PRNGKey(42)
-                
-                # xi_samples_single, key = compute_xi_samples(key, xi_mean_single, xi_cov_single, cem.nvar_single, cem.num_batch)
-                
-                # xi_samples = jnp.tile(xi_samples_single, (1, cem.num_dof))
-
-                xi_samples, key = cem.compute_xi_samples(key, xi_mean, xi_cov)
-
-                xi_samples_reshaped = xi_samples.reshape(cem.num_batch, cem.num_dof, cem.nvar_single)
-
-
-                
-
-                if inference:
-
-                    for i in range(cem.num_dof):
-
-
-                        theta_init = np.tile(data.qpos[i], (num_batch,1))
-                        v_start = np.tile(data.qvel[i], (num_batch,1)) 
-
-
-
-                        xi_samples_single = xi_samples_reshaped[:, i, :]   # i-th DOF
-
-                        inp = np.hstack([xi_samples_single, theta_init, v_start])
-
-
-                        # xi_samples_single_torch = torch.from_numpy(xi_samples_single).float().to(device)
-                        # theta_init_torch = torch.from_numpy(theta_init).float().to(device)
-                        # v_start_torch = torch.from_numpy(v_start).float().to(device)
-
-                        inp_torch = torch.tensor(inp).float().to(device)
-
-
-                        inp_norm_torch = robust_scale(inp_torch)
-
-                        
-                        neural_output_batch = load_mlp_projection_model(inp_torch, inp_norm_torch, rnn, cem, maxiter_projection, device= device)
-                        
-                        xi_projected_nn_output_single = neural_output_batch[:, :cem.nvar_single]
-                        lamda_init_nn_output_single = neural_output_batch[:, cem.nvar_single: 2*cem.nvar_single]
-                        s_init_nn_output_single = neural_output_batch[:, 2*cem.nvar_single: 2*cem.nvar_single + cem.num_total_constraints_per_dof]
-
-                        s_init_nn_output_single = torch.maximum( torch.zeros(( cem.num_batch, 
-                                                                              cem.num_total_constraints_per_dof ), device = device), s_init_nn_output_single)
-                        
-                        
-                        xi_projected_nn_output = append_torch_tensors(xi_projected_nn_output_single, xi_projected_nn_output)
-                        lamda_init_nn_output = append_torch_tensors(lamda_init_nn_output_single, lamda_init_nn_output)
-                        s_init_nn_output = append_torch_tensors(s_init_nn_output_single, s_init_nn_output)
-                        
-                        
-                     
-                    lamda_init = np.array(lamda_init_nn_output.cpu().detach().numpy())
-                        
-                    #lamda_init_nn_output   #jnp.zeros((cem.num_batch, cem.nvar))
-                        
-                    s_init = np.array(s_init_nn_output.cpu().detach().numpy())
-                        
-                    #s_init_nn_output   #jnp.zeros((cem.num_batch, cem.num_total_constraints))
-
-
-                cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean, xi_cov, _, _ = cem.compute_cem(
-                    xi_mean, xi_cov, data.qpos[:num_dof], data.qvel[:num_dof], 
-                    data.qacc[:num_dof], target_pos, target_rot,
-                    lamda_init, s_init
-                )
-                
-                # Apply the control (use average of planned velocities)
-                thetadot = np.mean(best_vels[1:int(num_steps*0.9)], axis=0)
-                data.qvel[:num_dof] = thetadot
-                mujoco.mj_step(model, data)
-
-                # Calculate costs
-                current_cost_g = np.linalg.norm(data.site_xpos[cem.tcp_id] - target_pos)   
-                current_cost_r = quaternion_distance(data.xquat[cem.hande_id], target_rot)  
-                current_cost = np.round(cost, 2)
-                
-                # Print status
-
-                print(f'Step Time: {"%.0f"%((time.time() - start_time)*1000)}ms | Cost g: {"%.2f"%(float(current_cost_g))}'
-                      f' | Cost r: {"%.2f"%(float(current_cost_r))} | Cost c: {"%.2f"%(float(best_cost_c))} | Cost: {current_cost}')
-                print(f'eef_quat: {data.xquat[cem.hande_id]}')
-                print(f'target: {current_target}')
-                
-                # Update viewer
-                viewer_.sync()
-
-                # Check if target is reached based on thresholds
-                if current_cost_g < position_threshold and current_cost_r < rotation_threshold:
-                    # Check if this was the last target
-                    if target_idx == len(target_names) - 1:
-                        if stop_at_final_target:
-                            print(f"Reached final target: {current_target}. Stopping motion.")
-                            # Hold position by setting velocities to zero
-                            thetadot = np.zeros(num_dof)
-                            data.qvel[:num_dof] = thetadot
-                        else:
-                            # Loop back to first target
-                            target_idx = 0
-                            current_target = target_names[target_idx]
-                            print(f"Reached final target. Looping back to first target: {current_target}")
-                    else:
-                        # Move to next target
-                        target_idx = target_idx + 1
-                        current_target = target_names[target_idx]
-                        print(f"Moving to next target: {current_target}")
+                    timestep_counter +=1   
+                    xi_projected_nn_output = [] #jnp.zeros((cem.num_batch, cem.nvar))
+                    lamda_init_nn_output = [] #jnp.zeros((cem.num_batch, cem.nvar))
+                    s_init_nn_output = [] #jnp.zeros((cem.num_batch, cem.num_total_constraints))
+                    # Time the step
+                    start_time = time.time()
                     
-                    # If transitioning to home, save current position for reference
-                    if current_target == "home" and "target_0" in target_names:
-                        model.body(name="target_0").pos = data.site_xpos[cem.tcp_id].copy()
-                        model.body(name="target_0").quat = data.xquat[cem.hande_id].copy()
+                    # Determine target position and orientation
+                    if current_target != "home":
+                        target_pos = model.body(name=current_target).pos
+                        target_rot = model.body(name=current_target).quat
+                    else:
+                        target_pos = init_position
+                        target_rot = init_rotation
 
-                # Store data
-                cost_g_list.append(best_cost_g)
-                cost_r_list.append(best_cost_r)
-                cost_c_list.append(best_cost_c)
-                thetadot_list.append(thetadot)
-                theta_list.append(data.qpos[:num_dof].copy())
-                cost_list.append(current_cost[-1] if isinstance(current_cost, np.ndarray) else current_cost)
+                    # Special case for target_1 (moving target with end-effector)
+                    if current_target == "target_1" and "target_0" in target_names:
+                        model.body(name="target_0").pos = data.site_xpos[cem.tcp_id]
+                        model.body(name="target_0").quat = data.xquat[cem.hande_id]
 
-                # Sleep to maintain simulation speed
-                time_until_next_step = model.opt.timestep - (time.time() - start_time)
-                if time_until_next_step > 0:
-                    time.sleep(time_until_next_step)
+                    # Compute CEM control
+                    # Compute raw samples from mean and covariance
+                    # Pass raw sample through to Network
+                    #Raw sample and initialize
+                    
+                    #rnn_inference(rnn_type="LSTM", model_weights_path=None, dataset_size=1000):
+                    
+                    
+                    # xi_samples = jnp.tile(xi_samples_single, (1, cem.num_dof))
+
+                    xi_samples, key = cem.compute_xi_samples(cem.key, xi_mean, xi_cov)
+
+                    xi_samples_reshaped = xi_samples.reshape(cem.num_batch, cem.num_dof, cem.nvar_single)
+
+
+                    
+
+                    if inference:
+
+                        for i in range(cem.num_dof):
+
+
+                            theta_init = np.tile(data.qpos[i], (num_batch,1))
+                            v_start = np.tile(data.qvel[i], (num_batch,1)) 
+
+                            xi_samples_single = xi_samples_reshaped[:, i, :]   # i-th DOF
+
+                            inp = np.hstack([xi_samples_single, theta_init, v_start])
+
+
+                            # xi_samples_single_torch = torch.from_numpy(xi_samples_single).float().to(device)
+                            # theta_init_torch = torch.from_numpy(theta_init).float().to(device)
+                            # v_start_torch = torch.from_numpy(v_start).float().to(device)
+
+                            inp_torch = torch.tensor(inp).float().to(device)
+
+
+                            inp_norm_torch = robust_scale(inp_torch)
+
+                            neural_output_batch = mlp_model.mlp(inp_norm_torch)
+                            
+                            xi_projected_nn_output_single = neural_output_batch[:, :cem.nvar_single]
+                            lamda_init_nn_output_single = neural_output_batch[:, cem.nvar_single: 2*cem.nvar_single]
+                            s_init_nn_output_single = neural_output_batch[:, 2*cem.nvar_single: 2*cem.nvar_single + cem.num_total_constraints_per_dof]
+
+                            s_init_nn_output_single = torch.maximum( torch.zeros(( cem.num_batch, 
+                                                                                cem.num_total_constraints_per_dof ), device = device), s_init_nn_output_single)
+                            
+                            
+                            xi_projected_nn_output = append_torch_tensors(xi_projected_nn_output_single, xi_projected_nn_output)
+                            lamda_init_nn_output = append_torch_tensors(lamda_init_nn_output_single, lamda_init_nn_output)
+                            s_init_nn_output = append_torch_tensors(s_init_nn_output_single, s_init_nn_output)
+                            
+                            
+                        
+                        lamda_init = np.array(lamda_init_nn_output.cpu().detach().numpy())
+                            
+                        #lamda_init_nn_output   #jnp.zeros((cem.num_batch, cem.nvar))
+                            
+                        s_init = np.array(s_init_nn_output.cpu().detach().numpy())
+                            
+                        #s_init_nn_output   #jnp.zeros((cem.num_batch, cem.num_total_constraints))
+
+
+                    cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean, xi_cov, _, _ = cem.compute_cem(
+                        xi_mean, xi_cov, data.qpos[:num_dof], data.qvel[:num_dof], 
+                        data.qacc[:num_dof], target_pos, target_rot,
+                        lamda_init, s_init, xi_samples
+                    )
+                    
+                    # Apply the control (use average of planned velocities)
+                    thetadot = np.mean(best_vels[1:int(num_steps*0.9)], axis=0)
+                    data.qvel[:num_dof] = thetadot
+                    mujoco.mj_step(model, data)
+
+                    # Calculate costs
+                    current_cost_g = np.linalg.norm(data.site_xpos[cem.tcp_id] - target_pos)   
+                    current_cost_r = quaternion_distance(data.xquat[cem.hande_id], target_rot)  
+                    current_cost = np.round(cost, 2)
+                    
+                    # Print status
+
+                    print(f'Step Time: {"%.0f"%((time.time() - start_time)*1000)}ms | Cost g: {"%.2f"%(float(current_cost_g))}'
+                        f' | Cost r: {"%.2f"%(float(current_cost_r))} | Cost c: {"%.2f"%(float(best_cost_c))} | Cost: {current_cost}')
+                    print(f'eef_quat: {data.xquat[cem.hande_id]}')
+                    print(f'target: {current_target}')
+                    print(f'timetstep_counter:{timestep_counter}')
+                    
+                    # Update viewer
+                    viewer_.sync()
+
+                    # Check if target is reached based on thresholds
+                    if current_cost_g < position_threshold and current_cost_r < rotation_threshold:
+                        # Check if this was the last target
+                        if target_idx == len(target_names) - 1:
+                            if stop_at_final_target:
+                                print(f"Reached final target: {current_target}. Stopping motion.")
+                                # Hold position by setting velocities to zero
+                                thetadot = np.zeros(num_dof)
+                                data.qvel[:num_dof] = thetadot
+                            else:
+                                # Loop back to first target
+                                target_idx = 0
+                                current_target = target_names[target_idx]
+                                print(f"Reached final target. Looping back to first target: {current_target}")
+                        else:
+                            # Move to next target
+                            target_idx = target_idx + 1
+                            current_target = target_names[target_idx]
+                            print(f"Moving to next target: {current_target}")
+                        
+                        # If transitioning to home, save current position for reference
+                        if current_target == "home" and "target_0" in target_names:
+                            model.body(name="target_0").pos = data.site_xpos[cem.tcp_id].copy()
+                            model.body(name="target_0").quat = data.xquat[cem.hande_id].copy()
+
+                    # Store data
+                    cost_g_list.append(best_cost_g)
+                    cost_r_list.append(best_cost_r)
+                    cost_c_list.append(best_cost_c)
+                    thetadot_list.append(thetadot)
+                    theta_list.append(data.qpos[:num_dof].copy())
+                    cost_list.append(current_cost[-1] if isinstance(current_cost, np.ndarray) else current_cost)
+
+                    # Sleep to maintain simulation speed
+                    time_until_next_step = model.opt.timestep - (time.time() - start_time)
+                    if time_until_next_step > 0:
+                        time.sleep(time_until_next_step)
+        
+            except KeyboardInterrupt:
+                print("Interrupted by user!")
+        
+            finally:
+            # Save data if requested
+                if save_data:
+                    np.savetxt(f'{data_dir}/costs.csv', cost_list, delimiter=",")
+                    np.savetxt(f'{data_dir}/thetadot.csv', thetadot_list, delimiter=",")
+                    np.savetxt(f'{data_dir}/theta.csv', theta_list, delimiter=",")
+                    np.savetxt(f'{data_dir}/cost_g.csv', cost_g_list, delimiter=",")
+                    np.savetxt(f'{data_dir}/cost_r.csv', cost_r_list, delimiter=",")
+                    np.savetxt(f'{data_dir}/cost_c.csv', cost_c_list, delimiter=",")
+                    
+
     else:
         # Non-visualization mode would go here if needed
         print("Running without visualization is not implemented yet.")
         
-    # Save data if requested
-    if save_data:
-        np.savetxt(f'{data_dir}/costs.csv', cost_list, delimiter=",")
-        np.savetxt(f'{data_dir}/thetadot.csv', thetadot_list, delimiter=",")
-        np.savetxt(f'{data_dir}/theta.csv', theta_list, delimiter=",")
-        np.savetxt(f'{data_dir}/cost_g.csv', cost_g_list, delimiter=",")
-        np.savetxt(f'{data_dir}/cost_r.csv', cost_r_list, delimiter=",")
-        np.savetxt(f'{data_dir}/cost_c.csv', cost_c_list, delimiter=",")
+    
     
     return {
         'cost_g': cost_g_list,

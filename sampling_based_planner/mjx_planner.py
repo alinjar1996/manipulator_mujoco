@@ -484,12 +484,12 @@ class cem_planner():
 	@partial(jax.jit, static_argnums=(0,))
 	def cem_iter(self, carry,  scan_over):
 
-		init_pos, init_vel, target_pos, target_rot, xi_mean, xi_cov, key, state_term, lamda_init, s_init = carry
+		init_pos, init_vel, target_pos, target_rot, xi_mean, xi_cov, key, state_term, lamda_init, s_init, xi_samples = carry
 
 		xi_mean_prev = xi_mean 
 		xi_cov_prev = xi_cov
 
-		xi_samples, key = self.compute_xi_samples(key, xi_mean, xi_cov)
+		#xi_samples, key = self.compute_xi_samples(key, xi_mean, xi_cov)
 		xi_filtered = self.compute_projection_filter(xi_samples, state_term, lamda_init=lamda_init, s_init=s_init, init_pos=init_pos)
 
 		thetadot = jnp.dot(self.A_thetadot, xi_filtered.T).T
@@ -501,7 +501,9 @@ class cem_planner():
 		xi_ellite, idx_ellite, cost_ellite = self.compute_ellite_samples(cost_batch, xi_samples)
 		xi_mean, xi_cov = self.compute_mean_cov(cost_ellite, xi_mean_prev, xi_cov_prev, xi_ellite)
 
-		carry = (init_pos, init_vel, target_pos, target_rot, xi_mean, xi_cov, key, state_term, lamda_init, s_init)
+		xi_samples_new, key = self.compute_xi_samples(key, xi_mean, xi_cov)
+
+		carry = (init_pos, init_vel, target_pos, target_rot, xi_mean, xi_cov, key, state_term, lamda_init, s_init, xi_samples_new)
 
 		return carry, (cost_batch, cost_g_batch, cost_r_batch, cost_c_batch, thetadot, theta)
 
@@ -517,6 +519,7 @@ class cem_planner():
 		target_rot,
 		lamda_init,
 		s_init,
+		xi_samples
 		):
 
 		theta_init = jnp.tile(init_pos, (self.num_batch, 1))
@@ -542,7 +545,7 @@ class cem_planner():
   
 		key, subkey = jax.random.split(self.key)
 
-		carry = (init_pos, init_vel, target_pos, target_rot, xi_mean, xi_cov, key, state_term, lamda_init, s_init)
+		carry = (init_pos, init_vel, target_pos, target_rot, xi_mean, xi_cov, key, state_term, lamda_init, s_init, xi_samples)
 		scan_over = jnp.array([0]*self.maxiter_cem)
 		
 		carry, out = jax.lax.scan(self.cem_iter, carry, scan_over, length=self.maxiter_cem)
@@ -571,11 +574,12 @@ def main():
 	#opt_class = cem_planner(num_dof, num_batch, w_pos=3, num_elite=0.1, maxiter_cem=30)	
 	opt_class = cem_planner(num_dof=6, num_batch=2000, num_steps=50, maxiter_cem=1,
                            w_pos=1, w_rot=0.5, w_col=10, num_elite=0.05, timestep=0.05,
-						   maxiter_projection=20)
+						   maxiter_projection=20, max_joint_pos = np.pi, max_joint_vel=2.0, max_joint_acc=5.0, max_joint_jerk=10.0)
 
 	start_time_comp_cem = time.time()
 	xi_mean = jnp.zeros(opt_class.nvar)
 	xi_cov = 10.0*jnp.identity(opt_class.nvar)
+	xi_samples, key = opt_class.compute_xi_samples(opt_class.key, xi_mean, xi_cov)
 	init_pos = jnp.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 	init_vel = jnp.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 	init_acc = jnp.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
@@ -588,7 +592,7 @@ def main():
 																									xi_cov,
 																									init_pos, init_vel, 
                     																				init_acc, target_pos, target_rot,
-                    																				lamda_init, s_init)
+                    																				lamda_init, s_init, xi_samples)
 	
 	#print(f"best_vels: {best_vels}")
 	print(f"Total time: {round(time.time()-start_time, 2)}s")

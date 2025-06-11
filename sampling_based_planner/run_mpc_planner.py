@@ -3,7 +3,7 @@ import numpy as np
 from mpc_planner import run_cem_planner
 
 
-
+inference = True
 #Customized parameters
 results = run_cem_planner(
     # CEM parameters
@@ -44,10 +44,11 @@ results = run_cem_planner(
     
     # Save data
     save_data=True,
-    data_dir='custom_data',
+    data_dir=f'custom_data_inference_{inference}',
 
     #Inference MLP for lamda_init and s_init
-    inference=True,
+    inference=inference 
+,
     #rnn = 'GRU',
     rnn = 'LSTM',
 

@@ -176,7 +176,11 @@ def run_cem_planner(
 
     #MLP related
     inference = None,
-    rnn = None
+    rnn = None,
+    max_joint_pos = None,
+    max_joint_vel = None,
+    max_joint_acc = None,
+    max_joint_jerk = None,
 ):
     """
     Run CEM planner with configurable parameters
@@ -239,7 +243,11 @@ def run_cem_planner(
         w_col=w_col,
         num_elite=num_elite,
         timestep=timestep,
-        maxiter_projection=maxiter_projection
+        maxiter_projection=maxiter_projection,
+        max_joint_pos = max_joint_pos ,
+        max_joint_vel = max_joint_vel, 
+		max_joint_acc = max_joint_acc, 
+        max_joint_jerk = max_joint_jerk
     )
     print(f"Initialized CEM Planner: {round(time.time()-start_time, 2)}s")
 

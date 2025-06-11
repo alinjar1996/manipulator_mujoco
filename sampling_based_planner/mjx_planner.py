@@ -20,7 +20,8 @@ import time
 class cem_planner():
 
 	def __init__(self, num_dof=None, num_batch=None, num_steps=None, timestep=None, maxiter_cem=None, num_elite=None, w_pos=None, w_rot=None, w_col=None, 
-			     maxiter_projection=None):
+			     maxiter_projection=None, max_joint_pos = None ,max_joint_vel = None, 
+				 max_joint_acc = None, max_joint_jerk = None):
 		super(cem_planner, self).__init__()
 	 
 		self.num_dof = num_dof
@@ -112,10 +113,10 @@ class cem_planner():
 		self.maxiter_projection = maxiter_projection
 		self.maxiter_cem = maxiter_cem
 
-		self.v_max = 2.0
-		self.a_max = 5.0
-		self.j_max = 10.0
-		self.p_max = 180*np.pi/180
+		self.v_max = max_joint_vel
+		self.a_max = max_joint_acc
+		self.j_max = max_joint_jerk
+		self.p_max = max_joint_pos
 
 
 		#Calculate number constraints
@@ -180,6 +181,7 @@ class cem_planner():
 			f'\n Model path: {self.model_path}',
 			f'\n Timestep: {self.t}',
 			f'\n CEM Iter: {self.maxiter_cem}',
+			f'\n Projection Iter: {self.maxiter_projection}',
 			f'\n Number of batches: {self.num_batch}',
 			f'\n Number of steps per trajectory: {self.num}',
 			f'\n Time per trajectory: {self.t_fin}',

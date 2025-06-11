@@ -1,4 +1,5 @@
 
+import numpy as np
 from mpc_planner import run_cem_planner
 
 
@@ -7,7 +8,7 @@ from mpc_planner import run_cem_planner
 results = run_cem_planner(
     # CEM parameters
     num_dof=6,
-    num_batch=500,  # Use More samples for better optimization
+    num_batch=1000,  # Use More samples for better optimization
     num_steps=50,     # Use More steps for longer planning horizon
     num_elite=0.05,   # Use More elite samples for better convergence #Int(num_elite*num_batch) is used to select elite samples
     timestep=0.05,     # Simulation Time Step Use Smaller timestep for more accurate simulation
@@ -27,6 +28,12 @@ results = run_cem_planner(
     
     # Target sequence
     target_names=["target_0", "target_1", "target_2", "home"],
+
+    #Joint limits
+    max_joint_pos= 180.0*np.pi/180.0,
+    max_joint_vel= 2.0,
+    max_joint_acc= 5.0,
+    max_joint_jerk= 10.0,
     
     # Visualization
     cam_distance=4,  # View 

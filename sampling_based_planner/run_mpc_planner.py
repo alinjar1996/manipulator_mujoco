@@ -3,7 +3,7 @@ import numpy as np
 from mpc_planner import run_cem_planner
 
 
-inference = False
+inference = True
 #Customized parameters
 results = run_cem_planner(
     # CEM parameters
@@ -14,7 +14,7 @@ results = run_cem_planner(
     timestep=0.05,     # Simulation Time Step Use Smaller timestep for more accurate simulation
     
     maxiter_cem=1,      # CEM iterations: Use More iterations for better convergence     
-    maxiter_projection=3,   # Projection Filter iterations: Use More iterations for better Filtering
+    maxiter_projection=5,   # Projection Filter iterations: Use More iterations for better Filtering
     w_pos=20.0,      # weight on position error
     w_rot=3.0,       # weight on rotation error
     w_col=80.0,      # weight on collision avoidance

@@ -14,7 +14,7 @@ results = run_cem_planner(
     timestep=0.05,     # Simulation Time Step Use Smaller timestep for more accurate simulation
     
     maxiter_cem=1,      # CEM iterations: Use More iterations for better convergence     
-    maxiter_projection=2,   # Projection Filter iterations: Use More iterations for better Filtering
+    maxiter_projection=5,   # Projection Filter iterations: Use More iterations for better Filtering
     w_pos=20.0,      # weight on position error
     w_rot=3.0,       # weight on rotation error
     w_col=80.0,      # weight on collision avoidance
@@ -27,7 +27,8 @@ results = run_cem_planner(
     initial_qpos=[1.5, -1.8, 1.75, -1.25, -1.6, 0],
     
     # Target sequence
-    target_names=["target_0", "target_1", "target_2", "home"],
+    #target_names=["target_0", "target_1", "target_2", "home"],
+    target_names=["target_0", "home"],
 
     #Joint limits
     max_joint_pos= 180.0*np.pi/180.0,
@@ -39,7 +40,7 @@ results = run_cem_planner(
     cam_distance=4,  # View 
     
     # Convergence thresholds
-    position_threshold=0.08,  # Stricter position convergence Better for more complex tasks
+    position_threshold=0.05,  # Stricter position convergence Better for more complex tasks
     rotation_threshold=0.1,   # Stricter rotation convergence Better for more complex tasks
     
     # Save data
@@ -53,7 +54,7 @@ results = run_cem_planner(
     rnn = 'LSTM',
 
     #Stop at final target
-    stop_at_final_target=True 
+    stop_at_final_target=False 
 )
 
 

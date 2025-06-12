@@ -240,8 +240,11 @@ def run_cem_planner(
     xi_mean_single = jnp.zeros(cem.nvar_single)
     xi_cov_single = 10*jnp.identity(cem.nvar_single)
 
-    xi_mean = jnp.tile(xi_mean_single, cem.num_dof)
-    xi_cov = jnp.kron(jnp.eye(cem.num_dof), xi_cov_single)
+    xi_mean_init = jnp.tile(xi_mean_single, cem.num_dof)
+    xi_cov_init = jnp.kron(jnp.eye(cem.num_dof), xi_cov_single)
+
+    xi_mean = xi_mean_init
+    xi_cov = xi_cov_init
 
     xi_samples, key = cem.compute_xi_samples(cem.key, xi_mean, xi_cov)
 
@@ -284,7 +287,8 @@ def run_cem_planner(
     
     #Number of features
     num_feature = num_steps + 1 + 1 #joint vel for all timestep + theta_init + v_start
-    mlp_model = load_mlp_projection_model(num_feature, rnn, cem, maxiter_projection, device= device)
+    if inference:
+        mlp_model = load_mlp_projection_model(num_feature, rnn, cem, maxiter_projection, device= device)
 
     timestep_counter = 0
     # Run the control loop
@@ -311,23 +315,36 @@ def run_cem_planner(
                         target_pos = init_position
                         target_rot = init_rotation
 
-                    # Special case for target_1 (moving target with end-effector)
-                    if current_target == "target_1" and "target_0" in target_names:
-                        model.body(name="target_0").pos = data.site_xpos[cem.tcp_id]
-                        model.body(name="target_0").quat = data.xquat[cem.hande_id]
+
 
                     # Compute CEM control
                     # Compute raw samples from mean and covariance
                     # Pass raw sample through to Network
                     #Raw sample and initialize
+                    # print("MEAN:", xi_mean.shape, xi_mean)
+                    # print("COV:", xi_cov.shape, xi_cov)
                     
                     
                     
                     # xi_samples = jnp.tile(xi_samples_single, (1, cem.num_dof))
 
+                    eigvals = np.linalg.eigvals(xi_cov)
+                    if np.min(eigvals)< 1e-6:
+                        xi_cov = xi_cov_init
+                        # eigvals = np.linalg.eigvals(xi_cov)
+                        
+                    # assert np.all(eigvals >= -1e-10)
+
                     xi_samples, key = cem.compute_xi_samples(cem.key, xi_mean, xi_cov)
 
                     xi_samples_reshaped = xi_samples.reshape(cem.num_batch, cem.num_dof, cem.nvar_single)
+
+                    
+                    # print("xi_mean has NaN:", np.isnan(xi_mean).any())
+                    # print("xi_cov has NaN:", np.isnan(xi_cov).any())
+                    # print("xi_samples has NaN:", np.isnan(xi_samples).any())
+                    # print("max_xi_cov", np.max(np.abs(xi_cov)))
+                    # print("max_xi_mean", np.max(np.abs(xi_mean)))
 
 
                     
@@ -378,6 +395,8 @@ def run_cem_planner(
                             
                         #s_init_nn_output   #jnp.zeros((cem.num_batch, cem.num_total_constraints))
 
+                    # print("XI SAMPLES:",xi_samples)
+
 
                     cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, \
                     xi_mean, xi_cov, thd_all, th_all, avg_primal_res, avg_fixed_res, \
@@ -394,12 +413,13 @@ def run_cem_planner(
                         xi_samples
                     )
 
-
+                    # print("THETADOT:", thd_all)
                     
                     # Apply the control (use average of planned velocities)
                     thetadot = np.mean(best_vels[1:int(num_steps*0.9)], axis=0)
+                    # print("THETADOT:", thetadot)
                     data.qvel[:num_dof] = thetadot
-                    mujoco.mj_step(model, data)
+                    #mujoco.mj_step(model, data)
 
                     # Calculate costs
                     current_cost_g = np.linalg.norm(data.site_xpos[cem.tcp_id] - target_pos)   
@@ -433,8 +453,7 @@ def run_cem_planner(
                             if stop_at_final_target:
                                 print(f"Reached final target: {current_target}. Stopping motion.")
                                 # Hold position by setting velocities to zero
-                                thetadot = np.zeros(num_dof)
-                                data.qvel[:num_dof] = thetadot
+                                data.qvel[:num_dof] = np.zeros(num_dof)
                             else:
                                 # Loop back to first target
                                 target_idx = 0
@@ -451,6 +470,10 @@ def run_cem_planner(
                             model.body(name="target_0").pos = data.site_xpos[cem.tcp_id].copy()
                             model.body(name="target_0").quat = data.xquat[cem.hande_id].copy()
 
+                    
+                    # MJX Step here
+                    mujoco.mj_step(model, data)
+                    
                     # Store data
                     
                     cost_g_list.append(best_cost_g)

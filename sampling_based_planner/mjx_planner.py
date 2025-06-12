@@ -288,9 +288,6 @@ class cem_planner():
 		# Reshape to final form: (num_batch, total_pos_constraints)
 		b_pos = b_pos_stacked.reshape((self.num_batch, -1))  # shape: (num_batch, self.num_pos_constraints)
         
-		# jax.debug.print("b_vel: {}", b_vel.shape)
-		# jax.debug.print("b_pos: {}", b_pos.shape)
-		# jax.debug.print("b_acc: {}", b_acc.shape)
 
 		b_control = jnp.hstack((b_vel, b_acc, b_jerk, b_pos))
 
@@ -514,7 +511,12 @@ class cem_planner():
 		xi_ellite, idx_ellite, cost_ellite = self.compute_ellite_samples(cost_batch, xi_samples)
 		xi_mean, xi_cov = self.compute_mean_cov(cost_ellite, xi_mean_prev, xi_cov_prev, xi_ellite)
 
+
 		xi_samples_new, key = self.compute_xi_samples(key, xi_mean, xi_cov)
+
+		# jax.debug.print("xi_mean has NaN: {}", jnp.isnan(xi_mean).any())
+		# jax.debug.print("xi_cov has NaN: {}", jnp.isnan(xi_cov).any())
+		# jax.debug.print("xi_samples has NaN: {}", jnp.isnan(xi_samples_new).any())
 
 		carry = (init_pos, init_vel, target_pos, target_rot, xi_mean, xi_cov, key, state_term, lamda_init, s_init, xi_samples_new)
 
@@ -596,7 +598,7 @@ class cem_planner():
 			avg_res_fixed,
 			primal_residuals,
 			fixed_point_residuals,
-			idx_min
+			idx_min,
 		)
 def main():
 	num_dof = 6

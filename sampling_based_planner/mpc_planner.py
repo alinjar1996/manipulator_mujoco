@@ -331,9 +331,7 @@ def run_cem_planner(
                     eigvals = np.linalg.eigvals(xi_cov)
                     if np.min(eigvals)< 1e-6:
                         xi_cov = xi_cov_init
-                        # eigvals = np.linalg.eigvals(xi_cov)
-                        
-                    # assert np.all(eigvals >= -1e-10)
+                    # xi_cov = xi_cov_init    
 
                     xi_samples, key = cem.compute_xi_samples(cem.key, xi_mean, xi_cov)
 
@@ -442,6 +440,8 @@ def run_cem_planner(
                     print(f'eef_quat: {data.xquat[cem.hande_id]}')
                     print(f'target: {current_target}')
                     print(f'timetstep_counter:{timestep_counter}')
+                    print(f'data.site_xpos[cem.tcp_id]', data.site_xpos[cem.tcp_id])
+                    print(f'target_pos', target_pos)
                     
                     # Update viewer
                     viewer_.sync()
@@ -465,10 +465,10 @@ def run_cem_planner(
                             current_target = target_names[target_idx]
                             print(f"Moving to next target: {current_target}")
                         
-                        # If transitioning to home, save current position for reference
-                        if current_target == "home" and "target_0" in target_names:
-                            model.body(name="target_0").pos = data.site_xpos[cem.tcp_id].copy()
-                            model.body(name="target_0").quat = data.xquat[cem.hande_id].copy()
+                        # # If transitioning to home, save current position for reference
+                        # if current_target == "home" and "target_0" in target_names:
+                        #     model.body(name="target_0").pos = data.site_xpos[cem.tcp_id].copy()
+                        #     model.body(name="target_0").quat = data.xquat[cem.hande_id].copy()
 
                     
                     # MJX Step here

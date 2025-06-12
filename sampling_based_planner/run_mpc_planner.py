@@ -3,7 +3,7 @@ import numpy as np
 from mpc_planner import run_cem_planner
 
 
-inference = False
+inference = True
 #Customized parameters
 results = run_cem_planner(
     # CEM parameters

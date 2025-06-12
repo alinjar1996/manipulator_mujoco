@@ -459,7 +459,8 @@ def run_cem_planner(
                     thetadot_list.append(thetadot)
                     theta_list.append(data.qpos[:num_dof].copy())
                     cost_list.append(current_cost[-1] if isinstance(current_cost, np.ndarray) else current_cost)
-
+                    
+                    
                     avg_primal_residual_list.append(current_primal_res_avg)
                     avg_fixed_point_residual_list.append(current_fixed_res_avg)
 

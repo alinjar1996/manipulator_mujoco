@@ -272,6 +272,11 @@ def run_cem_planner(
     cost_c_list = []
     thetadot_list = []
     theta_list = []
+    avg_primal_residual_list = []
+    avg_fixed_point_residual_list = []
+
+    best_cost_primal_residual_list = []
+    best_cost_fixed_point_residual_list = []
     
     # Current target index
     target_idx = 0
@@ -374,11 +379,22 @@ def run_cem_planner(
                         #s_init_nn_output   #jnp.zeros((cem.num_batch, cem.num_total_constraints))
 
 
-                    cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean, xi_cov, _, _ = cem.compute_cem(
-                        xi_mean, xi_cov, data.qpos[:num_dof], data.qvel[:num_dof], 
-                        data.qacc[:num_dof], target_pos, target_rot,
-                        lamda_init, s_init, xi_samples
+                    cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, \
+                    xi_mean, xi_cov, thd_all, th_all, avg_primal_res, avg_fixed_res, \
+                    primal_res, fixed_res, idx_min = cem.compute_cem(
+                        xi_mean,
+                        xi_cov,
+                        data.qpos[:num_dof],
+                        data.qvel[:num_dof],
+                        data.qacc[:num_dof],
+                        target_pos,
+                        target_rot,
+                        lamda_init,
+                        s_init,
+                        xi_samples
                     )
+
+
                     
                     # Apply the control (use average of planned velocities)
                     thetadot = np.mean(best_vels[1:int(num_steps*0.9)], axis=0)
@@ -389,7 +405,16 @@ def run_cem_planner(
                     current_cost_g = np.linalg.norm(data.site_xpos[cem.tcp_id] - target_pos)   
                     current_cost_r = quaternion_distance(data.xquat[cem.hande_id], target_rot)  
                     current_cost = np.round(cost, 2)
+
+                    #Residuals
+                    #Mean residuals across batches
+                    current_primal_res_avg = np.mean(avg_primal_res, axis=1)
+                    current_fixed_res_avg = np.mean(avg_fixed_res, axis=1) 
                     
+                    #Mean residuals for batch with best cost
+                    current_primal_res_best_cost = avg_primal_res[:, idx_min]
+                    current_fixed_res_best_cost = avg_fixed_res[:, idx_min]
+
                     # Print status
 
                     print(f'Step Time: {"%.0f"%((time.time() - start_time)*1000)}ms | Cost g: {"%.2f"%(float(current_cost_g))}'
@@ -427,12 +452,20 @@ def run_cem_planner(
                             model.body(name="target_0").quat = data.xquat[cem.hande_id].copy()
 
                     # Store data
+                    
                     cost_g_list.append(best_cost_g)
                     cost_r_list.append(best_cost_r)
                     cost_c_list.append(best_cost_c)
                     thetadot_list.append(thetadot)
                     theta_list.append(data.qpos[:num_dof].copy())
                     cost_list.append(current_cost[-1] if isinstance(current_cost, np.ndarray) else current_cost)
+
+                    avg_primal_residual_list.append(current_primal_res_avg)
+                    avg_fixed_point_residual_list.append(current_fixed_res_avg)
+
+                    best_cost_primal_residual_list.append(current_primal_res_best_cost)
+                    best_cost_fixed_point_residual_list.append(current_fixed_res_best_cost)
+
 
                     # Sleep to maintain simulation speed
                     time_until_next_step = model.opt.timestep - (time.time() - start_time)
@@ -451,6 +484,12 @@ def run_cem_planner(
                     np.savetxt(f'{data_dir}/cost_g.csv', cost_g_list, delimiter=",")
                     np.savetxt(f'{data_dir}/cost_r.csv', cost_r_list, delimiter=",")
                     np.savetxt(f'{data_dir}/cost_c.csv', cost_c_list, delimiter=",")
+                    np.savetxt(f'{data_dir}/avg_primal_residual.csv', avg_primal_residual_list, delimiter=",")
+                    np.savetxt(f'{data_dir}/avg_fixed_point_residual.csv', avg_fixed_point_residual_list, delimiter=",")
+                    np.savetxt(f'{data_dir}/best_cost_primal_residual.csv', best_cost_primal_residual_list, delimiter=",")
+                    np.savetxt(f'{data_dir}/best_cost_fixed_point_residual.csv', best_cost_fixed_point_residual_list, delimiter=",")
+
+
                     
 
     else:
@@ -465,7 +504,9 @@ def run_cem_planner(
         'cost_c': cost_c_list,
         'cost': cost_list,
         'thetadot': thetadot_list,
-        'theta': theta_list
+        'theta': theta_list,
+        'primal_residual': avg_primal_residual_list,
+        'fixed_point_residual': avg_fixed_point_residual_list
     }
 
 if __name__ == "__main__":

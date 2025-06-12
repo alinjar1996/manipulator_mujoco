@@ -254,7 +254,7 @@ class cem_planner():
 		return b_eq_term
 
 	@partial(jax.jit, static_argnums=(0,))
-	def compute_projection(self, lamda_init, s_init, b_eq_term, xi_samples, init_pos):
+	def compute_feasible_control(self, lamda_init, s_init, b_eq_term, xi_samples, init_pos):
 		b_vel = jnp.hstack((
 			self.v_max * jnp.ones((self.num_batch, self.num_vel_constraints // 2)),
 			self.v_max * jnp.ones((self.num_batch, self.num_vel_constraints // 2))
@@ -342,7 +342,7 @@ class cem_planner():
 
 
 	@partial(jax.jit, static_argnums=(0,))
-	def compute_projection_filter(self, xi_samples, state_term, lamda_init, s_init, init_pos):
+	def compute_projection(self, xi_samples, state_term, lamda_init, s_init, init_pos):
 
 		b_eq_term = self.compute_boundary_vec_batch(state_term)
 
@@ -358,6 +358,8 @@ class cem_planner():
 		# lamda_a = jnp.zeros(( self.num_batch, self.nvar  ))
  		# lamda_p = jnp.zeros(( self.num_batch, self.nvar  ))
 		#Define scan function (following original structure)
+		primal_residuals = []
+		fixed_point_residuals = []
 		def lax_custom_projection(carry, idx):
 
 			# xi_projected init is not required
@@ -366,7 +368,7 @@ class cem_planner():
 			s_prev = s
 			
 			# Perform projection step
-			primal_sol, s, res_projection, lamda = self.compute_projection(
+			primal_sol, s, res_projection, lamda = self.compute_feasible_control(
 				lamda, s, b_eq_term, xi_samples, init_pos)
 			
 			
@@ -375,7 +377,11 @@ class cem_planner():
 			fixed_point_residual = (jnp.linalg.norm(lamda_prev - lamda, axis=1) +
 								jnp.linalg.norm(s_prev - s, axis=1))
 			
+
+			
 			return (primal_sol, lamda, s), (primal_residual, fixed_point_residual)
+		
+
 		
 		# Initialize carry
 		carry_init = (xi_projected_init, lamda_init, s_init)
@@ -388,12 +394,15 @@ class cem_planner():
 		)
 
 		primal_sol, lamda, s = carry_final
-		primal_residual, fixed_point_residual = res_tot
+		primal_residuals, fixed_point_residuals = res_tot
+
+		primal_residuals = jnp.stack(primal_residuals)
+		fixed_point_residuals = jnp.stack(fixed_point_residuals)
 
 		# for i in range(0, self.maxiter_projection):
-		# 	primal_sol, s_v, s_a, s_p,  lamda_v, lamda_a, lamda_p, res_projection  = self.compute_projection(lamda_init, s_init, b_eq_term,  xi_samples)
+		# 	primal_sol, s_v, s_a, s_p,  lamda_v, lamda_a, lamda_p, res_projection  = self.compute_feasible_control(lamda_init, s_init, b_eq_term,  xi_samples)
 	 
-		return primal_sol
+		return primal_sol, primal_residuals, fixed_point_residuals
 
 	@partial(jax.jit, static_argnums=(0,))
 	def mjx_step(self, mjx_data, thetadot_single):
@@ -490,7 +499,11 @@ class cem_planner():
 		xi_cov_prev = xi_cov
 
 		#xi_samples, key = self.compute_xi_samples(key, xi_mean, xi_cov)
-		xi_filtered = self.compute_projection_filter(xi_samples, state_term, lamda_init=lamda_init, s_init=s_init, init_pos=init_pos)
+		xi_filtered, primal_residuals, fixed_point_residuals = self.compute_projection(xi_samples, state_term, lamda_init=lamda_init, s_init=s_init, init_pos=init_pos)
+        
+		avg_res_primal = jnp.sum(primal_residuals, axis = 0)/self.maxiter_projection
+    	
+		avg_res_fixed_point = jnp.sum(fixed_point_residuals, axis = 0)/self.maxiter_projection
 
 		thetadot = jnp.dot(self.A_thetadot, xi_filtered.T).T
 
@@ -505,7 +518,8 @@ class cem_planner():
 
 		carry = (init_pos, init_vel, target_pos, target_rot, xi_mean, xi_cov, key, state_term, lamda_init, s_init, xi_samples_new)
 
-		return carry, (cost_batch, cost_g_batch, cost_r_batch, cost_c_batch, thetadot, theta)
+		return carry, (cost_batch, cost_g_batch, cost_r_batch, cost_c_batch, thetadot, theta, 
+				 avg_res_primal, avg_res_fixed_point, primal_residuals, fixed_point_residuals)
 
     #=jnp.array([1.5, -1.8, 1.75, -1.25, -1.6, 0]) 
 	@partial(jax.jit, static_argnums=(0,))
@@ -549,7 +563,7 @@ class cem_planner():
 		scan_over = jnp.array([0]*self.maxiter_cem)
 		
 		carry, out = jax.lax.scan(self.cem_iter, carry, scan_over, length=self.maxiter_cem)
-		cost_batch, cost_g_batch, cost_r_batch, cost_c_batch, thetadot, theta = out
+		cost_batch, cost_g_batch, cost_r_batch, cost_c_batch, thetadot, theta, avg_res_primal, avg_res_fixed, primal_residuals, fixed_point_residuals = out
 
 		idx_min = jnp.argmin(cost_batch[-1])
 		cost = jnp.min(cost_batch, axis=1)
@@ -564,8 +578,26 @@ class cem_planner():
 		xi_mean = carry[4]
 		xi_cov = carry[5]
 
-		return cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean, xi_cov, thetadot, theta
-	
+		# primal_res = primal_residual[-1, :, idx_min]
+		# fixed_res = fixed_point_residual[-1, :, idx_min]
+	    
+		return (
+			cost,
+			best_cost_g,
+			best_cost_r,
+			best_cost_c,
+			best_vels,
+			best_traj,
+			xi_mean,
+			xi_cov,
+			thetadot,
+			theta,
+			avg_res_primal,
+			avg_res_fixed,
+			primal_residuals,
+			fixed_point_residuals,
+			idx_min
+		)
 def main():
 	num_dof = 6
 	num_batch = 500
@@ -588,20 +620,37 @@ def main():
 	s_init = jnp.zeros((opt_class.num_batch, opt_class.num_total_constraints))
 	lamda_init = jnp.zeros((opt_class.num_batch, opt_class.nvar))
 	
-	cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, xi_mean, xi_cov, _, _ = opt_class.compute_cem(xi_mean,
-																									xi_cov,
-																									init_pos, init_vel, 
-                    																				init_acc, target_pos, target_rot,
-                    																				lamda_init, s_init, xi_samples)
+
+	
+	cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, \
+	xi_mean, xi_cov, thd_all, th_all, avg_primal_res, avg_fixed_res, \
+	primal_res, fixed_res = opt_class.compute_cem(
+		xi_mean,
+		xi_cov,
+		init_pos,
+		init_vel,
+		init_acc,
+		target_pos,
+		target_rot,
+		lamda_init,
+		s_init,
+		xi_samples
+	)
 	
 	#print(f"best_vels: {best_vels}")
 	print(f"Total time: {round(time.time()-start_time, 2)}s")
 	print(f"Compute CEM time: {round(time.time()-start_time_comp_cem, 2)}s")
+
+	print(f"avg primal_res: {avg_primal_res.shape}")
+	print(f"avg fixed_res: {avg_fixed_res.shape}")
+
+	print(f"primal_res: {primal_res.shape}")
+	print(f"fixed_res: {fixed_res.shape}")
     
-	os.makedirs('sampling_based_planner/data', exist_ok=True)
+	# os.makedirs('sampling_based_planner/data', exist_ok=True)
 	
-	np.savetxt('sampling_based_planner/data/output_costs.csv',cost, delimiter=",")
-	np.savetxt('sampling_based_planner/data/best_vels.csv',best_vels, delimiter=",")
+	# np.savetxt('sampling_based_planner/data/output_costs.csv',cost, delimiter=",")
+	# np.savetxt('sampling_based_planner/data/best_vels.csv',best_vels, delimiter=",")
 	# np.savetxt('data/best_traj.csv',best_traj, delimiter=",")
 	# np.savetxt('data/best_cost_g.csv',best_cost_g, delimiter=",")
 

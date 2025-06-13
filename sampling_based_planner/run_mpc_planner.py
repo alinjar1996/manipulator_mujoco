@@ -4,6 +4,7 @@ from mpc_planner import run_cem_planner
 
 
 inference = False
+target_names=["target_0", "home"]
 #Customized parameters
 results = run_cem_planner(
     # CEM parameters
@@ -45,7 +46,7 @@ results = run_cem_planner(
     
     # Save data
     save_data=True,
-    data_dir=f'custom_data_inference_{inference}',
+    data_dir=f'custom_data_{target_names[0]}_inference_{inference}',
 
     #Inference MLP for lamda_init and s_init
     inference=inference 

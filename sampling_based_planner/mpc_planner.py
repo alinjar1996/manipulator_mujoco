@@ -231,6 +231,13 @@ def run_cem_planner(
     # Get model and data
     model = cem.model
     data = cem.data
+
+    # Defining Obstacle position here is not needed as that is taken from environment
+    # For mujoco (official Python bindings):
+    obstacle_indices = [i for i in range(cem.model.nbody) 
+                    if cem.model.body(i).name.startswith("obstacle_")]
+    obst_pos = [cem.mjx_data.xpos[i] for i in obstacle_indices]
+    obst_quat = [cem.mjx_data.xquat[i] for i in obstacle_indices]
     
     # Set initial joint positions
     data.qpos[:num_dof] = jnp.array(initial_qpos)
@@ -259,11 +266,11 @@ def run_cem_planner(
 
     # First target for test computation
     target_pos = model.body(name=target_names[0]).pos
-    target_rot = model.body(name=target_names[0]).quat
+    target_quat = model.body(name=target_names[0]).quat
 
     # Warm-up computation
     start_time = time.time()
-    _ = cem.compute_cem(xi_mean, xi_cov, data.qpos[:num_dof], data.qvel[:num_dof], data.qacc[:num_dof], target_pos, target_rot, lamda_init, s_init
+    _ = cem.compute_cem(xi_mean, xi_cov, data.qpos[:num_dof], data.qvel[:num_dof], data.qacc[:num_dof], target_pos, target_quat, lamda_init, s_init
                         , xi_samples)
     print(f"Compute CEM: {round(time.time()-start_time, 2)}s")
 
@@ -283,6 +290,9 @@ def run_cem_planner(
 
     best_cost_primal_residual_list = []
     best_cost_fixed_point_residual_list = []
+
+    target_pos_list = []
+    target_quat_list = []
 
     
     # Current target index
@@ -314,28 +324,16 @@ def run_cem_planner(
                     # Determine target position and orientation
                     if current_target != "home":
                         target_pos = model.body(name=current_target).pos
-                        target_rot = model.body(name=current_target).quat
+                        target_quat = model.body(name=current_target).quat
                     else:
                         target_pos = init_position
-                        target_rot = init_rotation
-
-
-
-                    # Compute CEM control
-                    # Compute raw samples from mean and covariance
-                    # Pass raw sample through to Network
-                    #Raw sample and initialize
-                    # print("MEAN:", xi_mean.shape, xi_mean)
-                    # print("COV:", xi_cov.shape, xi_cov)
+                        target_quat = init_rotation
                     
                     
-                    
-                    # xi_samples = jnp.tile(xi_samples_single, (1, cem.num_dof))
-
+                    # If Covariance matrix is non-PSD, switch to initial covariance matrix
                     eigvals = np.linalg.eigvals(xi_cov)
                     if np.min(eigvals)< 1e-6:
                         xi_cov = xi_cov_init
-                    # xi_cov = xi_cov_init    
 
                     xi_samples, key = cem.compute_xi_samples(cem.key, xi_mean, xi_cov)
 
@@ -409,7 +407,7 @@ def run_cem_planner(
                         data.qvel[:num_dof],
                         data.qacc[:num_dof],
                         target_pos,
-                        target_rot,
+                        target_quat,
                         lamda_init,
                         s_init,
                         xi_samples
@@ -425,7 +423,7 @@ def run_cem_planner(
 
                     # Calculate costs
                     current_cost_g = np.linalg.norm(data.site_xpos[cem.tcp_id] - target_pos)   
-                    current_cost_r = quaternion_distance(data.xquat[cem.hande_id], target_rot)  
+                    current_cost_r = quaternion_distance(data.xquat[cem.hande_id], target_quat)  
                     current_cost = np.round(cost, 2)
 
                     #Residuals
@@ -491,6 +489,13 @@ def run_cem_planner(
 
                     best_cost_primal_residual_list.append(current_primal_res_best_cost)
                     best_cost_fixed_point_residual_list.append(current_fixed_res_best_cost)
+                    
+                    # Check if target position or orientation is already in the list: avoid repeated entry
+                    if not any(np.allclose(pos_, target_pos) for pos_ in target_pos_list):
+                        target_pos_list.append(target_pos)
+
+                    if not any(np.allclose(quat_, target_quat) for quat_ in target_quat_list):
+                        target_quat_list.append(target_quat)
 
                     
 
@@ -520,8 +525,16 @@ def run_cem_planner(
                     # Convert list to numpy array to get (timestep_counter, num_step, num_step)
                     best_vel_array = np.array(best_vel_list)  # Shape: (timestep_counter, num_step, num_step)
 
-                    # Method 1: Save as binary numpy file (recommended for 3D data)
+                    # Save as binary numpy file (recommended for 3D data)
                     np.save(f'{data_dir}/best_vels.npy', best_vel_array)
+
+                    # Save Obstacle positions and orientations
+                    np.savetxt(f'{data_dir}/obstacle_positions.csv', obst_pos, delimiter=",")
+                    np.savetxt(f'{data_dir}/obstacle_quaternions.csv', obst_quat, delimiter=",")
+
+                    #Save Target positions and orientations
+                    np.savetxt(f'{data_dir}/target_positions.csv', target_pos_list, delimiter=",")
+                    np.savetxt(f'{data_dir}/target_quaternions.csv', target_quat_list, delimiter=",")
 
 
 

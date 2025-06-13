@@ -275,11 +275,15 @@ def run_cem_planner(
     cost_c_list = []
     thetadot_list = []
     theta_list = []
+    best_vel_list = []
+    
+
     avg_primal_residual_list = []
     avg_fixed_point_residual_list = []
 
     best_cost_primal_residual_list = []
     best_cost_fixed_point_residual_list = []
+
     
     # Current target index
     target_idx = 0
@@ -438,10 +442,10 @@ def run_cem_planner(
                     print(f'Step Time: {"%.0f"%((time.time() - start_time)*1000)}ms | Cost g: {"%.2f"%(float(current_cost_g))}'
                         f' | Cost r: {"%.2f"%(float(current_cost_r))} | Cost c: {"%.2f"%(float(best_cost_c))} | Cost: {current_cost}')
                     print(f'eef_quat: {data.xquat[cem.hande_id]}')
+                    print(f'eef_pos', data.site_xpos[cem.tcp_id])
                     print(f'target: {current_target}')
-                    print(f'timetstep_counter:{timestep_counter}')
-                    print(f'data.site_xpos[cem.tcp_id]', data.site_xpos[cem.tcp_id])
                     print(f'target_pos', target_pos)
+                    print(f'timetstep_counter:{timestep_counter}')
                     
                     # Update viewer
                     viewer_.sync()
@@ -464,13 +468,9 @@ def run_cem_planner(
                             target_idx = target_idx + 1
                             current_target = target_names[target_idx]
                             print(f"Moving to next target: {current_target}")
-                        
-                        # # If transitioning to home, save current position for reference
-                        # if current_target == "home" and "target_0" in target_names:
-                        #     model.body(name="target_0").pos = data.site_xpos[cem.tcp_id].copy()
-                        #     model.body(name="target_0").quat = data.xquat[cem.hande_id].copy()
-
+                
                     
+
                     # MJX Step here
                     mujoco.mj_step(model, data)
                     
@@ -482,6 +482,8 @@ def run_cem_planner(
                     thetadot_list.append(thetadot)
                     theta_list.append(data.qpos[:num_dof].copy())
                     cost_list.append(current_cost[-1] if isinstance(current_cost, np.ndarray) else current_cost)
+
+                    best_vel_list.append(best_vels)
                     
                     
                     avg_primal_residual_list.append(current_primal_res_avg)
@@ -490,6 +492,7 @@ def run_cem_planner(
                     best_cost_primal_residual_list.append(current_primal_res_best_cost)
                     best_cost_fixed_point_residual_list.append(current_fixed_res_best_cost)
 
+                    
 
                     # Sleep to maintain simulation speed
                     time_until_next_step = model.opt.timestep - (time.time() - start_time)
@@ -508,10 +511,18 @@ def run_cem_planner(
                     np.savetxt(f'{data_dir}/cost_g.csv', cost_g_list, delimiter=",")
                     np.savetxt(f'{data_dir}/cost_r.csv', cost_r_list, delimiter=",")
                     np.savetxt(f'{data_dir}/cost_c.csv', cost_c_list, delimiter=",")
+
                     np.savetxt(f'{data_dir}/avg_primal_residual.csv', avg_primal_residual_list, delimiter=",")
                     np.savetxt(f'{data_dir}/avg_fixed_point_residual.csv', avg_fixed_point_residual_list, delimiter=",")
                     np.savetxt(f'{data_dir}/best_cost_primal_residual.csv', best_cost_primal_residual_list, delimiter=",")
                     np.savetxt(f'{data_dir}/best_cost_fixed_point_residual.csv', best_cost_fixed_point_residual_list, delimiter=",")
+
+                    # Convert list to numpy array to get (timestep_counter, num_step, num_step)
+                    best_vel_array = np.array(best_vel_list)  # Shape: (timestep_counter, num_step, num_step)
+
+                    # Method 1: Save as binary numpy file (recommended for 3D data)
+                    np.save(f'{data_dir}/best_vels.npy', best_vel_array)
+
 
 
                     
@@ -529,8 +540,11 @@ def run_cem_planner(
         'cost': cost_list,
         'thetadot': thetadot_list,
         'theta': theta_list,
+        'best_vels': best_vel_list,
         'primal_residual': avg_primal_residual_list,
-        'fixed_point_residual': avg_fixed_point_residual_list
+        'fixed_point_residual': avg_fixed_point_residual_list,
+        'best_cost_primal_residual': best_cost_primal_residual_list,
+        'best_cost_fixed_point_residual': best_cost_fixed_point_residual_list
     }
 
 if __name__ == "__main__":

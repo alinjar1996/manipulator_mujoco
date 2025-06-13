@@ -3,8 +3,8 @@ import numpy as np
 from mpc_planner import run_cem_planner
 
 
-inference = False
-target_names=["target_0", "home"]
+inference = True
+target_names=["target_0","target_2", "target_1", "home"]
 #Customized parameters
 results = run_cem_planner(
     # CEM parameters
@@ -29,7 +29,7 @@ results = run_cem_planner(
     
     # Target sequence
     #target_names=["target_0", "target_1", "target_2", "home"],
-    target_names=["target_0", "home"],
+    target_names=target_names,
 
     #Joint limits
     max_joint_pos= 180.0*np.pi/180.0,
@@ -46,7 +46,7 @@ results = run_cem_planner(
     
     # Save data
     save_data=True,
-    data_dir=f'custom_data_{target_names[0]}_inference_{inference}',
+    data_dir=f'custom_data_{target_names[:-1]}_inference_{inference}',
 
     #Inference MLP for lamda_init and s_init
     inference=inference 

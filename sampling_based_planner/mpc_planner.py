@@ -330,10 +330,25 @@ def run_cem_planner(
                         target_quat = init_rotation
                     
                     
-                    # If Covariance matrix is non-PSD, switch to initial covariance matrix
-                    eigvals = np.linalg.eigvals(xi_cov)
-                    if np.min(eigvals)< 1e-6:
+                    # # If Covariance matrix is non-PSD or Nan, switch to initial covariance matrix
+                    # if not np.isnan(xi_cov).any():
+                    #     eigvals = np.linalg.eigvals(xi_cov)
+                    #     if np.min(eigvals)< 1e-6:
+                    #         xi_cov = xi_cov_init
+                    # else:
+                    #     xi_cov = xi_cov_init
+                    
+                    if np.isnan(xi_cov).any():
                         xi_cov = xi_cov_init
+
+                    if np.isnan(xi_mean).any():
+                        xi_mean = xi_mean_init
+
+                    try:
+                        np.linalg.cholesky(xi_cov)
+                    except np.linalg.LinAlgError:
+                        print("xi_cov is not Cholesky-decomposable. Reverting to xi_cov_init.")
+                        xi_cov = xi_cov_init    
 
                     xi_samples, key = cem.compute_xi_samples(cem.key, xi_mean, xi_cov)
 

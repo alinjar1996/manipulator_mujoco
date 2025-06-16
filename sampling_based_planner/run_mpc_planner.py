@@ -4,7 +4,7 @@ from mpc_planner import run_cem_planner
 
 
 inference = True
-target_names=["target_0","target_2", "target_1", "home"]
+target_names=["target_1","target_2", "target_0", "home"]
 #Customized parameters
 results = run_cem_planner(
     # CEM parameters

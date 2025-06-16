@@ -101,7 +101,7 @@ vis.add_geometry(pcd)
 
 # Set camera viewpoint for better 3D visualization
 ctr = vis.get_view_control()
-ctr.set_front([0, 0, 1])  # Look towards negative z
+ctr.set_front([0, 0, 1])  # Look towards positive z
 ctr.set_lookat([0, 0, 0])  # Look at origin
 ctr.set_up([0, 1, 0])     # Y-axis points up
 ctr.set_zoom(1.0)

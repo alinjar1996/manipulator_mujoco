@@ -1,10 +1,13 @@
 
 import numpy as np
 from mpc_planner import run_cem_planner
+import os
+import mujoco
 
 
 inference = True
 target_names=["target_1","target_2", "target_0", "home"]
+
 #Customized parameters
 results = run_cem_planner(
     # CEM parameters
@@ -28,7 +31,6 @@ results = run_cem_planner(
     initial_qpos=[1.5, -1.8, 1.75, -1.25, -1.6, 0],
     
     # Target sequence
-    #target_names=["target_0", "target_1", "target_2", "home"],
     target_names=target_names,
 
     #Joint limits
@@ -41,12 +43,18 @@ results = run_cem_planner(
     cam_distance=4,  # View 
     
     # Convergence thresholds
-    position_threshold=0.05,  # Stricter position convergence Better for more complex tasks
+    position_threshold=0.07,  # Stricter position convergence Better for more complex tasks
     rotation_threshold=0.1,   # Stricter rotation convergence Better for more complex tasks
     
-    # Save data
+    # Save Motion Related data
     save_data=True,
     data_dir=f'custom_data_{target_names[:-1]}_inference_{inference}',
+    
+    # Save Point Cloud data
+    generate_pcd=True,
+    accumulate_pcd=True,
+    pcd_interval=10, # Save point cloud every 10 steps
+    cam_name="camera1",
 
     #Inference MLP for lamda_init and s_init
     inference=inference 

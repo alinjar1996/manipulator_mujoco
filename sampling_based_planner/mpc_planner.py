@@ -291,6 +291,8 @@ def run_cem_planner(
 
     model = cem.model
     data = cem.data
+
+    
     
     # Defining Obstacle position here is not needed as that is taken from environment
     # For mujoco (official Python bindings):

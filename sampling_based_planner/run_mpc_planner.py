@@ -5,7 +5,7 @@ import os
 import mujoco
 
 
-inference = True
+inference = False
 target_names=["target_1","target_2", "target_0", "home"]
 
 #Customized parameters
@@ -19,9 +19,9 @@ results = run_cem_planner(
     
     maxiter_cem=1,      # CEM iterations: Use More iterations for better convergence     
     maxiter_projection=5,   # Projection Filter iterations: Use More iterations for better Filtering
-    w_pos=20.0,      # weight on position error
-    w_rot=3.0,       # weight on rotation error
-    w_col=80.0,      # weight on collision avoidance
+    w_pos=5.0,      # weight on position error
+    w_rot=1.0,       # weight on rotation error
+    w_col=40000.0,      # weight on collision avoidance
     
     #Shower parameters
     show_viewer=True,
@@ -51,8 +51,8 @@ results = run_cem_planner(
     data_dir=f'custom_data_{target_names[:-1]}_inference_{inference}',
     
     # Save Point Cloud data
-    generate_pcd=True,
-    accumulate_pcd=True,
+    generate_pcd=False,
+    accumulate_pcd=False,
     pcd_interval=10, # Save point cloud every 10 steps
     cam_name="camera1",
 

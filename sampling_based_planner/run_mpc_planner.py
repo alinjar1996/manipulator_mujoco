@@ -5,7 +5,7 @@ import os
 import mujoco
 
 
-inference = True
+inference = False
 target_names=["target_1","target_2", "target_0", "home"]
 
 #Customized parameters
@@ -47,12 +47,12 @@ results = run_cem_planner(
     rotation_threshold=0.1,   # Stricter rotation convergence Better for more complex tasks
     
     # Save Motion Related data
-    save_data=True,
+    save_data=False,
     data_dir=f'custom_data_{target_names[:-1]}_inference_{inference}',
     
     # Save Point Cloud data
-    generate_pcd=True,
-    accumulate_pcd=True,
+    generate_pcd=False,
+    accumulate_pcd=False,
     pcd_interval=10, # Save point cloud every 10 steps
     cam_name="camera1",
 

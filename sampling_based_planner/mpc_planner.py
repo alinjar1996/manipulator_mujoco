@@ -120,7 +120,7 @@ class MuJoCoPointCloudGenerator:
         
         return points, colors
 
-    def deduplicate_points(self, points, colors, threshold=0.001):
+    def deduplicate_points(self, points, colors, threshold=0.01):
         """Merge nearby points"""
         if len(points) == 0:
             return points, colors
@@ -465,12 +465,8 @@ def run_cem_planner(
                 print("Interrupted by user!")
             
             finally:
-                # Save accumulated point cloud
-                if generate_pcd and accumulate_pcd:
-                    print("Saving accumulated point cloud...")
-                    pcd_gen.save_accumulated_pcd()
                 
-                # Save other data
+                # Save Motion data
                 if save_data:
                     print("Saving data...")
                     os.makedirs(data_dir, exist_ok=True)
@@ -487,6 +483,11 @@ def run_cem_planner(
                     np.save(f'{data_dir}/best_vels.npy', np.array(best_vel_list))
                     np.savetxt(f'{data_dir}/target_positions.csv', target_pos_list, delimiter=",")
                     np.savetxt(f'{data_dir}/target_quaternions.csv', target_quat_list, delimiter=",")
+
+                                # Save accumulated point cloud
+                if generate_pcd and accumulate_pcd:
+                    print("Saving accumulated point cloud...")
+                    pcd_gen.save_accumulated_pcd()    
 
     return {
         'cost_g': cost_g_list,

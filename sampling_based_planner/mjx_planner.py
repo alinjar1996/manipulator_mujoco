@@ -156,11 +156,26 @@ class cem_planner():
 		self.mjx_data = jax.jit(mjx.forward)(self.mjx_model, self.mjx_data)
 		self.jit_step = jax.jit(mjx.step)
 
+		self.geom_ids = []
+		
+		# print("ngeomm", self.model.ngeom)
+		for i in range(self.model.ngeom):
+			name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_GEOM, i)
+			if name is not None and (
+				name.startswith('robot') or
+				name.startswith('obstacle') or
+				name.startswith('target')
+			):  
+				# print(f"Found geom: id={i}, name='{name}'")
+				self.geom_ids.append(i)
 
+		self.geom_ids_all = np.array(self.geom_ids)
+		
+		#self.geom_ids = np.array([mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, f'robot_{i}') for i in range(10)])
 
-		self.geom_ids = np.array([mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, f'robot_{i}') for i in range(10)])
+		# print("self.geom_ids", self.geom_ids)
 		# self.mask = jnp.sum(jnp.isin(self.mjx_data.contact.geom, self.geom_ids), axis=1)
-		self.mask = jnp.any(jnp.isin(self.mjx_data.contact.geom, self.geom_ids), axis=1)
+		self.mask = jnp.any(jnp.isin(self.mjx_data.contact.geom, self.geom_ids_all), axis=1)
 		# self.mask = jnp.where(self.mask==2, 0, self.mask)
 		# self.mask = self.mask.astype(bool)
 

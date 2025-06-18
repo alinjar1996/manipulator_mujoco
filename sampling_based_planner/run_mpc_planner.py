@@ -21,7 +21,7 @@ results = run_cem_planner(
     maxiter_projection=5,   # Projection Filter iterations: Use More iterations for better Filtering
     w_pos=5.0,      # weight on position error
     w_rot=1.0,       # weight on rotation error
-    w_col=40000.0,      # weight on collision avoidance
+    w_col=5000.0,      # weight on collision avoidance
     
     #Shower parameters
     show_viewer=True,

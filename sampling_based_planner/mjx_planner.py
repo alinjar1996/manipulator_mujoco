@@ -156,13 +156,30 @@ class cem_planner():
 		self.mjx_data = jax.jit(mjx.forward)(self.mjx_model, self.mjx_data)
 		self.jit_step = jax.jit(mjx.step)
 
+		self.geom_ids = []
+		
+		print("ngeomm", self.model.ngeom)
+		for i in range(self.model.ngeom):
+			name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_GEOM, i)
+			if name is not None and (
+				name.startswith('robot') 
+				#or
+				# name.startswith('obstacle') or
+				# name.startswith('target')
+			):  
+				# print(f"Found geom: id={i}, name='{name}'")
+				self.geom_ids.append(i)
+
+		self.geom_ids_all = np.array(self.geom_ids)
+		
+		#self.geom_ids = np.array([mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, f'robot_{i}') for i in range(10)])
+		# print("self.geom_ids", self.geom_ids)
+		self.mask = jnp.any(jnp.isin(self.mjx_data.contact.geom, self.geom_ids_all), axis=1)
+		# print("self.mask", len(self.mask))
+		# print("self.mask", self.mask.shape)
+		print(f"{self.mask.sum()} / {self.mask.shape[0]} contacts involve considered geoms.")
 
 
-		self.geom_ids = np.array([mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, f'robot_{i}') for i in range(10)])
-		# self.mask = jnp.sum(jnp.isin(self.mjx_data.contact.geom, self.geom_ids), axis=1)
-		self.mask = jnp.any(jnp.isin(self.mjx_data.contact.geom, self.geom_ids), axis=1)
-		# self.mask = jnp.where(self.mask==2, 0, self.mask)
-		# self.mask = self.mask.astype(bool)
 
 	
 		self.hande_id = self.model.body(name="hande").id
@@ -186,6 +203,7 @@ class cem_planner():
 			f'\n Time per trajectory: {self.t_fin}',
 			f'\n Number of variables: {self.nvar}',
 			f'\n Number of Total constraints: {self.num_total_constraints}',
+			f'\n Number of geomteric IDs for colllision: {len(self.geom_ids_all)}'
 
 		)
 
@@ -411,6 +429,7 @@ class cem_planner():
 		eef_rot = mjx_data.xquat[self.hande_id]	
 		eef_pos = mjx_data.site_xpos[self.tcp_id]
 		collision = mjx_data.contact.dist[self.mask]
+		#collision shape is equal to self.mask.sum(); it means number of True elements in self.mask
 
 		return mjx_data, (theta, eef_pos, eef_rot, collision)
 
@@ -625,7 +644,7 @@ def main():
 	
 	cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, \
 	xi_mean, xi_cov, thd_all, th_all, avg_primal_res, avg_fixed_res, \
-	primal_res, fixed_res = opt_class.compute_cem(
+	primal_res, fixed_res, _ = opt_class.compute_cem(
 		xi_mean,
 		xi_cov,
 		init_pos,

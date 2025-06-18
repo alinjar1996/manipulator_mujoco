@@ -291,6 +291,16 @@ def run_cem_planner(
 
     model = cem.model
     data = cem.data
+
+    
+    
+    # Defining Obstacle position here is not needed as that is taken from environment
+    # For mujoco (official Python bindings):
+    obstacle_indices = [i for i in range(cem.model.nbody) 
+                    if cem.model.body(i).name.startswith("obstacle_")]
+    obst_pos = [cem.mjx_data.xpos[i] for i in obstacle_indices]
+    obst_quat = [cem.mjx_data.xquat[i] for i in obstacle_indices]
+
     data.qpos[:num_dof] = jnp.array(initial_qpos)
     mujoco.mj_forward(model, data)
 
@@ -468,8 +478,11 @@ def run_cem_planner(
                 
                 # Save Motion data
                 if save_data:
-                    print("Saving Motion data...")
+                    print("Saving Motion, Target and Obstacle data ...")
                     os.makedirs(data_dir, exist_ok=True)
+
+                    #Saving Motion data
+                    print("Saving Motion data...")
                     np.savetxt(f'{data_dir}/costs.csv', cost_list, delimiter=",")
                     np.savetxt(f'{data_dir}/thetadot.csv', thetadot_list, delimiter=",")
                     np.savetxt(f'{data_dir}/theta.csv', theta_list, delimiter=",")
@@ -481,12 +494,21 @@ def run_cem_planner(
                     np.savetxt(f'{data_dir}/best_cost_primal_residual.csv', best_cost_primal_residual_list, delimiter=",")
                     np.savetxt(f'{data_dir}/best_cost_fixed_point_residual.csv', best_cost_fixed_point_residual_list, delimiter=",")
                     np.save(f'{data_dir}/best_vels.npy', np.array(best_vel_list))
+                    print("Motion data saved!")
+                    
+                    # Save Target positions and orientations
+                    print("Saving Target positions and orientations...")
                     np.savetxt(f'{data_dir}/target_positions.csv', target_pos_list, delimiter=",")
                     np.savetxt(f'{data_dir}/target_quaternions.csv', target_quat_list, delimiter=",")
-                    
-                    print(f"Motion data saved to {data_dir}")
+                    print("Target positions and orientations saved!")
+                    # Save Obstacle positions and orientations
+                    print("Saving Obstacle positions and orientations...")
+                    np.savetxt(f'{data_dir}/obstacle_positions.csv', obst_pos, delimiter=",")
+                    np.savetxt(f'{data_dir}/obstacle_quaternions.csv', obst_quat, delimiter=",")
+                    print("Obstacle positions and orientations saved!")
+                    print(f"Motion, Target and Obstacle data saved to {data_dir}")
 
-                                # Save accumulated point cloud
+                # Save accumulated point cloud
                 if generate_pcd and accumulate_pcd:
                     print("Saving accumulated point cloud...")
                     pcd_gen.save_accumulated_pcd()    

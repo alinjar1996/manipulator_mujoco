@@ -3,113 +3,84 @@ import numpy as np
 import open3d as o3d
 import os
 
-print(os.getcwd())
-# Paths
-xml_path = "./sampling_based_planner/ur5e_hande_mjx/scene.xml"  # Update this to your XML file path
-
 # Load MuJoCo model
+xml_path = "./sampling_based_planner/ur5e_hande_mjx/scene.xml"
 model = mujoco.MjModel.from_xml_path(xml_path)
 data = mujoco.MjData(model)
 
-# Set camera parameters (render from camera1)
+# Camera setup
 cam_name = "camera1"
 cam_id = model.camera(cam_name).id
 height, width = 480, 640
 
-# Create a renderer
 renderer = mujoco.Renderer(model, height=height, width=width)
 mujoco.mj_forward(model, data)
 renderer.update_scene(data, camera=cam_name)
 
-# Render RGB and depth images
+# Render RGB and depth
 rgb = renderer.render()
 renderer.enable_depth_rendering()
 depth = renderer.render()
 
-# Alternative method if the above doesn't work:
-# You can also try using mujoco.mj_render with depth buffer
-# depth_buffer = np.zeros((height, width), dtype=np.float32)
-# mujoco.mjr_render(mujoco.mjVIS_DEPTH, model, data, renderer.con)
-# mujoco.mjr_readPixels(depth_buffer, None, mujoco.mjrRect(0, 0, width, height), renderer.con)
-# depth = depth_buffer
-
-# Get camera intrinsics
-fovy = model.cam_fovy[cam_id] if hasattr(model, 'cam_fovy') else model.vis.global_.fovy
-
-print("fovy", fovy)
-
-aspect = width / height
-f = height / (2 * np.tan(np.deg2rad(fovy) / 2))
+# Camera intrinsics
+fovy = model.cam_fovy[cam_id]
+f = height / (2 * np.tan(np.deg2rad(fovy / 2)))
 cx, cy = width / 2, height / 2
 
-# Get camera pose in world coordinates
+# Camera pose
 cam_pos = data.cam_xpos[cam_id]
 cam_mat = data.cam_xmat[cam_id].reshape(3, 3)
 
-# Build point cloud in camera coordinates
+# Project to 3D
 i, j = np.meshgrid(np.arange(width), np.arange(height), indexing='xy')
 z = depth
-
-# print("np.max(z)", np.max(z))
-print("z", z.shape)
-print("z_max", np.max(z))
-print("z_min", np.min(z))
-
-# # Handle depth values (MuJoCo depth might need conversion)
-# # Sometimes depth is in range [0,1] and needs to be converted to actual distances
-# if np.max(z) <= 1.0:
-#     # If depth is normalized, you might need to scale it
-#     # This depends on your scene setup - adjust znear and zfar accordingly
-#     znear = 0.01  # Adjust based on your camera setup
-#     zfar = 10.0   # Adjust based on your camera setup
-#     z = znear / (1 - z * (1 - znear/zfar))
-
-# Generate points in camera coordinates
 x = (i - cx) * z / f
 y = (j - cy) * z / f
-# Note: MuJoCo camera frame: x=right, y=up, z=backward (towards camera)
 points_cam = np.stack((x, -y, -z), axis=-1).reshape(-1, 3)
 
-# Transform points from camera coordinates to world coordinates
-# Apply rotation and translation
+# Transform to world frame
 points_world = (cam_mat @ points_cam.T).T + cam_pos
 points = points_world
 
-# Remove invalid points (NaN, inf, or very far points)
+# Flatten RGB and filter valid points
+rgb_flat = rgb.reshape(-1, 3)
 valid_mask = ~(np.isnan(points).any(axis=1) | np.isinf(points).any(axis=1))
-valid_mask = valid_mask & (np.abs(points[:, 2]) < 10.0)  # Remove points too far away
+valid_mask &= np.abs(points[:, 2]) < 10.0
+
 points = points[valid_mask]
+colors = rgb_flat[valid_mask].astype(np.uint8)
 
-# Create Open3D point cloud
-pcd = o3d.geometry.PointCloud()
-pcd.points = o3d.utility.Vector3dVector(points)
+# Combine into full array with unpacked r g b
+pcd_data = np.hstack((points, colors))
 
-# Assign colors from RGB image
-if rgb is not None:
-    rgb_flat = rgb.reshape(-1, 3) / 255.0
-    rgb_valid = rgb_flat[valid_mask]
-    if len(rgb_valid) == len(points):
-        pcd.colors = o3d.utility.Vector3dVector(rgb_valid)
+# Convert to Open3D PointCloud
+pcd_o3d = o3d.geometry.PointCloud()
+pcd_o3d.points = o3d.utility.Vector3dVector(points)
+pcd_o3d.colors = o3d.utility.Vector3dVector(colors / 255.0)  # Normalize to [0,1]
 
-# # Optional: Remove statistical outliers
-# pcd, _ = pcd.remove_statistical_outlier(nb_neighbors=20, std_ratio=2.0)
+# Visualize
+o3d.visualization.draw_geometries([pcd_o3d],
+                                  zoom=0.7,
+                                  front=[0.0, 0.0, 1.0],
+                                  lookat=[0.0, 0.0, 0.0],
+                                  up=[0.0, 1.0, 0.0])
 
-# Optional: Set a better viewpoint for visualization
-vis = o3d.visualization.Visualizer()
-vis.create_window()
-vis.add_geometry(pcd)
+# Save PCD file
+os.makedirs("pcd_data", exist_ok=True)
+output_path = "pcd_data/output_pointcloud_unpacked_rgb.pcd"
+with open(output_path, "w") as f:
+    f.write("# .PCD v0.7 - Point Cloud Data file format\n")
+    f.write("VERSION 0.7\n")
+    f.write("FIELDS x y z r g b\n")
+    f.write("SIZE 4 4 4 1 1 1\n")
+    f.write("TYPE F F F U U U\n")
+    f.write("COUNT 1 1 1 1 1 1\n")
+    f.write(f"WIDTH {pcd_data.shape[0]}\n")
+    f.write("HEIGHT 1\n")
+    f.write("VIEWPOINT 0 0 0 1 0 0 0\n")
+    f.write(f"POINTS {pcd_data.shape[0]}\n")
+    f.write("DATA ascii\n")
+    for row in pcd_data:
+        f.write(f"{row[0]} {row[1]} {row[2]} {int(row[3])} {int(row[4])} {int(row[5])}\n")
 
-# Set camera viewpoint for better 3D visualization
-ctr = vis.get_view_control()
-ctr.set_front([0, 0, 1])  # Look towards positive z
-ctr.set_lookat([0, 0, 0])  # Look at origin
-ctr.set_up([0, 1, 0])     # Y-axis points up
-ctr.set_zoom(1.0)
-
-vis.run()
-vis.destroy_window()
-
-# Optional: Save the point cloud
-#o3d.io.write_point_cloud("output_pointcloud_.pcd", pcd)
-
-o3d.io.write_point_cloud("output_pointcloud.pcd", pcd, write_ascii=True)
+print(f"Saved unpacked RGB point cloud to: {output_path}")

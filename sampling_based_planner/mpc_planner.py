@@ -468,7 +468,7 @@ def run_cem_planner(
                 
                 # Save Motion data
                 if save_data:
-                    print("Saving data...")
+                    print("Saving Motion data...")
                     os.makedirs(data_dir, exist_ok=True)
                     np.savetxt(f'{data_dir}/costs.csv', cost_list, delimiter=",")
                     np.savetxt(f'{data_dir}/thetadot.csv', thetadot_list, delimiter=",")
@@ -483,6 +483,8 @@ def run_cem_planner(
                     np.save(f'{data_dir}/best_vels.npy', np.array(best_vel_list))
                     np.savetxt(f'{data_dir}/target_positions.csv', target_pos_list, delimiter=",")
                     np.savetxt(f'{data_dir}/target_quaternions.csv', target_quat_list, delimiter=",")
+                    
+                    print(f"Motion data saved to {data_dir}")
 
                                 # Save accumulated point cloud
                 if generate_pcd and accumulate_pcd:

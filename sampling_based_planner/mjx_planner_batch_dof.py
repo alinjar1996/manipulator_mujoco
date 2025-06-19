@@ -44,7 +44,6 @@ class cem_planner():
 		#self.P, self.Pdot, self.Pddot = bernstein_coeff_ordern_arbitinterval.bernstein_coeff_ordern_new(49, tot_time_copy[0], tot_time_copy[-1], tot_time_copy)
 		#self.P, self.Pdot, self.Pddot = bernstein_coeff_order10_arbitinterval.bernstein_coeff_order10_new(10, tot_time_copy[0], tot_time_copy[-1], tot_time_copy)
         
-		#print("self.P", self.P.shape)
 
 
         #Velocity mapping 
@@ -167,7 +166,6 @@ class cem_planner():
 
 		self.geom_ids = []
 		
-		print("ngeomm", self.model.ngeom)
 		for i in range(self.model.ngeom):
 			name = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_GEOM, i)
 			if name is not None and (
@@ -186,7 +184,6 @@ class cem_planner():
 		self.mask = jnp.any(jnp.isin(self.mjx_data.contact.geom, self.geom_ids_all), axis=1)
 		# print("self.mask", len(self.mask))
 		# print("self.mask", self.mask.shape)
-		print(f"{self.mask.sum()} / {self.mask.shape[0]} contacts involve considered geoms.")
 
 		self.hande_id = self.model.body(name="hande").id
 		self.tcp_id = self.model.site(name="tcp").id
@@ -216,7 +213,7 @@ class cem_planner():
 			f'\n Number of variables: {self.nvar}',
 			f'\n Number of Total constraints: {self.num_total_constraints}',
 			f'\n Number of geomteric IDs for colllision: {len(self.geom_ids_all)}'
-
+		    f'\n{self.mask.sum()} / {self.mask.shape[0]} contacts involve robot.'
 		)
 
     
@@ -284,7 +281,7 @@ class cem_planner():
 	@partial(jax.jit, static_argnums=(0,))
 	def compute_boundary_vec_single_dof(self, state_term):
 
-		print("state_term", state_term.shape)
+		# print("state_term", state_term.shape)
 
 		num_eq_constraint_per_dof = int(jnp.shape(state_term)[0])
 
@@ -325,21 +322,19 @@ class cem_planner():
         
 		
 		# Expand to include time steps
-		b_pos_upper_expanded = jnp.tile(b_pos_upper[:, :, None], (1, 1, self.num_pos_constraints // (self.num_dof * 2)))  # (num_batch, 1, num_pos_constraints/2)
-		b_pos_lower_expanded = jnp.tile(b_pos_lower[:, :, None], (1, 1, self.num_pos_constraints // (self.num_dof * 2)))  # (num_batch, 1, num_pos_constraints/2)
+		b_pos_upper_expanded = jnp.tile(b_pos_upper[:, :, None], (1, 1, self.num_pos_constraints // (self.num_dof * 2)))  # (num_batch, 1, num_pos_constraints per dof/2)
+		b_pos_lower_expanded = jnp.tile(b_pos_lower[:, :, None], (1, 1, self.num_pos_constraints // (self.num_dof * 2)))  # (num_batch, 1, num_pos_constraintsper dof/2)
 		
 		# Stack upper and lower bounds
-		b_pos_stacked = jnp.concatenate([b_pos_upper_expanded, b_pos_lower_expanded], axis=2)  # (num_batch, 1, num_pos_constraints)
+		b_pos_stacked = jnp.concatenate([b_pos_upper_expanded, b_pos_lower_expanded], axis=2)  # (num_batch, 1, num_pos_constraints per dof)
 		
 		# Reshape to final form: (num_batch, total_pos_constraints)
-		b_pos = b_pos_stacked.reshape((self.num_batch, -1))  # shape: (num_batch, self.num_pos_constraints)
+		b_pos = b_pos_stacked.reshape((self.num_batch, -1))  # shape: (num_batch, self.num_pos_constraints per dof)
         
 		b_control_single_dof = jnp.hstack((b_vel, b_acc, b_jerk, b_pos))
 
 		# Augmented bounds with slack variables
 		b_control_aug_single_dof = b_control_single_dof - s_init_single_dof
-
-		
 
 		# Cost matrix
 		cost = (
@@ -363,11 +358,11 @@ class cem_planner():
 		# Solve KKT system
 		sol = jnp.linalg.solve(cost_mat, jnp.hstack((-lincost, b_eq_term_single_dof)).T).T
 
-		print("cost_mat.shape:", cost_mat.shape)
-		print("lincost.shape:", lincost.shape)
-		print("b_eq_term_single_dof.shape:", b_eq_term_single_dof.shape)
+		# print("cost_mat.shape:", cost_mat.shape)
+		# print("lincost.shape:", lincost.shape)
+		# print("b_eq_term_single_dof.shape:", b_eq_term_single_dof.shape)
 
-		print("sol.shape:", sol.shape)
+		# print("sol.shape:", sol.shape)
 
 		# Extract primal solution
 		xi_projected = sol[:, :self.nvar_single]
@@ -395,9 +390,9 @@ class cem_planner():
 									   lamda_init_single_dof, 
 									   s_init_single_dof, 
 									   init_pos_single_dof):
-		# state_term_single_dof: (B, K) → flatten across batch
-		print("state_term_single_dof", state_term_single_dof.shape)
-		print("state_term_single_dof", state_term_single_dof)
+		# # state_term_single_dof: (B, K) → flatten across batch
+		# print("state_term_single_dof", state_term_single_dof.shape)
+		# print("state_term_single_dof", state_term_single_dof)
 		b_eq_term = self.compute_boundary_vec_batch_single_dof(state_term_single_dof)  # should become (B, K), flattened
 
 		xi_projected_init_single_dof = xi_samples_single_dof
@@ -429,6 +424,9 @@ class cem_planner():
 		primal_sol, lamda, s = carry_final
 		primal_residuals, fixed_point_residuals = res_tot
 
+		primal_residuals = jnp.stack(primal_residuals)
+		fixed_point_residuals = jnp.stack(fixed_point_residuals)
+
 		return primal_sol, primal_residuals, fixed_point_residuals
 
 
@@ -449,8 +447,7 @@ class cem_planner():
 
 	@partial(jax.jit, static_argnums=(0,))
 	def compute_rollout_single(self, thetadot, init_pos, init_vel):
-		print("Computing rollout")
-		print("thetadot.shape", thetadot.shape)
+
 		mjx_data = self.mjx_data
 		qvel = mjx_data.qvel.at[:self.num_dof].set(init_vel)
 		qpos = mjx_data.qpos.at[:self.num_dof].set(init_pos)
@@ -474,17 +471,13 @@ class cem_planner():
 		y = 0.005
 		collision = collision.T
 
-		#jax.debug.print("collision :{}", collision.shape)
 
 		g = -collision[:, 1:]+collision[:, :-1]-y*collision[:, :-1]
 
-		#jax.debug.print("g :{}", g.shape)
 
 		cost_c = jnp.sum(jnp.max(g.reshape(g.shape[0], g.shape[1], 1), axis=-1, initial=0)) + jnp.sum(collision < 0)
 
-		#jax.debug.print("cost_c :{}", cost_c)
 		
-		#jnp.sum(jnp.where(collision<0, True, False)) is same as  jnp.sum(collision < 0)
 
 		cost = self.cost_weights['w_pos']*cost_g + self.cost_weights['w_rot']*cost_r + self.cost_weights['w_col']*cost_c
 		return cost, cost_g, cost_r, cost_c
@@ -530,31 +523,30 @@ class cem_planner():
 		xi_cov_prev = xi_cov
 
 		#xi_samples, key = self.compute_xi_samples(key, xi_mean, xi_cov)
-		
-        
-		print("xi_samples : {}".format(xi_samples.shape))
-		print("state_term : {}".format(state_term.shape))
-		print("lamda_init : {}".format(lamda_init.shape))
-		print("s_init : {}".format(s_init.shape))
-		print("init_pos : {}".format(init_pos.shape))
+        #xi_samples shape = (num_batch, num*num_dof)
+		# xi_samples_reshaped = xi_samples.reshape(self.num_batch, self.num ,self.num_dof)
+		# xi_samples_batched_over_dof = jnp.transpose(xi_samples_reshaped, (2, 0, 1)) # shape: (DoF, B, num)
 
-		xi_samples_reshaped = xi_samples.reshape(self.num_batch, self.num ,self.num_dof)
-		xi_samples_batched_over_dof = jnp.transpose(xi_samples_reshaped, (2, 0, 1)) # shape: (DoF, B, num)
+		# state_term_reshaped = state_term.reshape(self.num_batch, 1, self.num_dof)
+		# state_term_batched_over_dof = jnp.transpose(state_term_reshaped, (2, 0, 1)) #Shape: (DoF, B, 1)
 
-		state_term_reshaped = state_term.reshape(self.num_batch, 1, self.num_dof)
-		state_term_batched_over_dof = jnp.transpose(state_term_reshaped, (2, 0, 1)) #Shape: (DoF, B, 1)
+		# lamda_init_reshaped = lamda_init.reshape(self.num_batch, self.num ,self.num_dof)
+		# lamda_init_batched_over_dof = jnp.transpose(lamda_init_reshaped, (2, 0, 1)) # shape: (DoF, B, num)
 
-		lamda_init_reshaped = lamda_init.reshape(self.num_batch, self.num ,self.num_dof)
-		lamda_init_batched_over_dof = jnp.transpose(lamda_init_reshaped, (2, 0, 1)) # shape: (DoF, B, num)
+		# s_init_reshaped = s_init.reshape(self.num_batch, self.num_total_constraints_per_dof ,self.num_dof)
+		# s_init_batched_over_dof = jnp.transpose(s_init_reshaped, (2, 0, 1)) # shape: (DoF, B, num_total_constraints_per_dof)
 
-		s_init_reshaped = s_init.reshape(self.num_batch, self.num_total_constraints_per_dof ,self.num_dof)
-		s_init_batched_over_dof = jnp.transpose(s_init_reshaped, (2, 0, 1)) # shape: (DoF, B, num_total_constraints_per_dof)
+		xi_samples_reshaped = xi_samples.reshape(self.num_batch, self.num_dof, self.num)
+		xi_samples_batched_over_dof = jnp.transpose(xi_samples_reshaped, (1, 0, 2)) # shape: (DoF, B, num)
 
-		print("xi_samples_batched_over_dof : {}".format(xi_samples_batched_over_dof.shape))
-		print("state_term_batched_over_dof : {}".format(state_term_batched_over_dof.shape))
-		print("lamda_init_batched_over_dof : {}".format(lamda_init_batched_over_dof.shape))
-		print("s_init_batched_over_dof : {}".format(s_init_batched_over_dof.shape))
-		print("init_pos : {}".format(init_pos.shape))
+		state_term_reshaped = state_term.reshape(self.num_batch, self.num_dof, 1)
+		state_term_batched_over_dof = jnp.transpose(state_term_reshaped, (1, 0, 2)) #Shape: (DoF, B, 1)
+
+		lamda_init_reshaped = lamda_init.reshape(self.num_batch, self.num_dof, self.num)
+		lamda_init_batched_over_dof = jnp.transpose(lamda_init_reshaped, (1, 0, 2)) # shape: (DoF, B, num)
+
+		s_init_reshaped = s_init.reshape(self.num_batch, self.num_dof, self.num_total_constraints_per_dof )
+		s_init_batched_over_dof = jnp.transpose(s_init_reshaped, (1, 0, 2)) # shape: (DoF, B, num_total_constraints_per_dof)
 
 
 		
@@ -570,22 +562,12 @@ class cem_planner():
 		
 		primal_residuals = jnp.linalg.norm(primal_residuals, axis = 0)
 		fixed_point_residuals = jnp.linalg.norm(fixed_point_residuals, axis = 0)
-		
-		print("xi_filtered : {}".format(xi_filtered.shape))
-		print("primal_residuals : {}".format(primal_residuals.shape))
-		print("fixed_point_residuals : {}".format(fixed_point_residuals.shape))
-
-		#xi_filtered = xi_filtered.reshape(self.num_batch, self.num* self.num_dof)
-
-		
-		
+				
 		avg_res_primal = jnp.sum(primal_residuals, axis = 0)/self.maxiter_projection
     	
 		avg_res_fixed_point = jnp.sum(fixed_point_residuals, axis = 0)/self.maxiter_projection
 
 		thetadot = jnp.dot(self.A_thetadot, xi_filtered.T).T
-
-		print("thetadot : {}".format(thetadot.shape))
 
 
 		theta, eef_pos, eef_rot, collision = self.compute_rollout_batch(thetadot, init_pos, init_vel)
@@ -598,9 +580,6 @@ class cem_planner():
 
 		xi_samples_new, key = self.compute_xi_samples(key, xi_mean, xi_cov)
 
-		# jax.debug.print("xi_mean has NaN: {}", jnp.isnan(xi_mean).any())
-		# jax.debug.print("xi_cov has NaN: {}", jnp.isnan(xi_cov).any())
-		# jax.debug.print("xi_samples has NaN: {}", jnp.isnan(xi_samples_new).any())
 
 		carry = (init_pos, init_vel, target_pos, target_rot, xi_mean, xi_cov, key, state_term, lamda_init, s_init, xi_samples_new)
 
@@ -639,7 +618,6 @@ class cem_planner():
 
 		# state_term = jnp.asarray(state_term)
 
-		# jax.debug.print("state_term.shape: {}", state_term.shape)
 		
 		
   
@@ -660,7 +638,6 @@ class cem_planner():
 		best_cost_r = cost_r_batch[-1][idx_min]
 		best_cost_c = cost_c_batch[-1][idx_min]
 
-		#jax.debug.print("best_cost_g: {}", best_cost_g)
 		xi_mean = carry[4]
 		xi_cov = carry[5]
 
@@ -723,22 +700,8 @@ def main():
 		xi_samples
 	)
 	
-	#print(f"best_vels: {best_vels}")
 	print(f"Total time: {round(time.time()-start_time, 2)}s")
 	print(f"Compute CEM time: {round(time.time()-start_time_comp_cem, 2)}s")
-
-	print(f"avg primal_res: {avg_primal_res.shape}")
-	print(f"avg fixed_res: {avg_fixed_res.shape}")
-
-	print(f"primal_res: {primal_res.shape}")
-	print(f"fixed_res: {fixed_res.shape}")
-    
-	# os.makedirs('sampling_based_planner/data', exist_ok=True)
-	
-	# np.savetxt('sampling_based_planner/data/output_costs.csv',cost, delimiter=",")
-	# np.savetxt('sampling_based_planner/data/best_vels.csv',best_vels, delimiter=",")
-	# np.savetxt('data/best_traj.csv',best_traj, delimiter=",")
-	# np.savetxt('data/best_cost_g.csv',best_cost_g, delimiter=",")
 
 	
 	

@@ -1,6 +1,6 @@
 
 import numpy as np
-from mpc_planner import run_cem_planner
+from mpc_planner2 import run_cem_planner
 import os
 import mujoco
 
@@ -21,7 +21,7 @@ results = run_cem_planner(
     maxiter_projection=5,   # Projection Filter iterations: Use More iterations for better Filtering
     w_pos=3.0,      # weight on position error
     w_rot=1.0,       # weight on rotation error
-    w_col=5000.0,      # weight on collision avoidance
+    w_col= 500.0, #5000.0,      # weight on collision avoidance
     
     #Shower parameters
     show_viewer=True,
@@ -47,7 +47,7 @@ results = run_cem_planner(
     rotation_threshold=0.1,   # Stricter rotation convergence Better for more complex tasks
     
     # Save Motion Related data
-    save_data=True,
+    save_data=False,
     data_dir=f'custom_data_{target_names[:-1]}_inference_{inference}',
     
     # Save Point Cloud data

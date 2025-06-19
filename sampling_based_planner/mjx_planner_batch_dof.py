@@ -67,47 +67,55 @@ class cem_planner():
 		self.nvar_single = jnp.shape(self.P_jax)[1]
 		self.nvar = self.nvar_single*self.num_dof 
   
-		self.A_projection = jnp.identity(self.nvar)
 		self.rho_ineq = 1.0
 		self.rho_projection = 1.0
-		
-		A_v_ineq, A_v = self.get_A_v()
-		self.A_v_ineq = jnp.asarray(A_v_ineq) 
-		self.A_v = jnp.asarray(A_v)
 
-		A_a_ineq, A_a = self.get_A_a()
-		self.A_a_ineq = jnp.asarray(A_a_ineq) 
-		self.A_a = jnp.asarray(A_a)
+		self.A_projection_single_dof = jnp.identity(self.nvar_single)
 
-		A_j_ineq, A_j = self.get_A_j()
-		self.A_j_ineq = jnp.asarray(A_j_ineq)
-		self.A_j = jnp.asarray(A_j)
+		A_v_ineq_single_dof, A_v_single_dof = self.get_A_v_single_dof()
+		self.A_v_ineq_single_dof = jnp.asarray(A_v_ineq_single_dof) 
+		self.A_v_single_dof = jnp.asarray(A_v_single_dof)
+
+		A_a_ineq_single_dof, A_a_single_dof = self.get_A_a_single_dof()
+		self.A_a_ineq_single_dof = jnp.asarray(A_a_ineq_single_dof) 
+		self.A_a_single_dof = jnp.asarray(A_a_single_dof)
+
+		A_j_ineq_single_dof, A_j_single_dof = self.get_A_j_single_dof()
+		self.A_j_ineq_single_dof = jnp.asarray(A_j_ineq_single_dof)
+		self.A_j_single_dof = jnp.asarray(A_j_single_dof)
   
-		A_p_ineq, A_p = self.get_A_p()
-		self.A_p_ineq = jnp.asarray(A_p_ineq) 
-		self.A_p = jnp.asarray(A_p)
+		A_p_ineq_single_dof, A_p_single_dof = self.get_A_p_single_dof()
+		self.A_p_ineq_single_dof = jnp.asarray(A_p_ineq_single_dof) 
+		self.A_p_single_dof = jnp.asarray(A_p_single_dof)
 
-        # Combined control matrix (like A_control in )
-		self.A_control = jnp.vstack((
-			self.A_v_ineq,
-			self.A_a_ineq,
-			self.A_j_ineq,
-			self.A_p_ineq
+
+
+		# Combined control matrix (like A_control in )
+		self.A_control_single_dof = jnp.vstack((
+			self.A_v_ineq_single_dof,
+			self.A_a_ineq_single_dof,
+			self.A_j_ineq_single_dof,
+			self.A_p_ineq_single_dof
 		))
-  
-		A_eq = self.get_A_eq()
-		self.A_eq = jnp.asarray(A_eq)
-  
-		# Q_inv = self.get_Q_inv(A_eq)
-		# self.Q_inv = jnp.asarray(Q_inv)
-  
+
+		A_eq_single_dof = self.get_A_eq_single_dof()
+		self.A_eq_single_dof = jnp.asarray(A_eq_single_dof)
+
+		A_theta_single_dof, A_thetadot_single_dof, A_thetaddot_single_dof, A_thetadddot_single_dof = self.get_A_traj_single_dof()
 		A_theta, A_thetadot, A_thetaddot, A_thetadddot = self.get_A_traj()
-		self.A_theta = jnp.asarray(A_theta)
-		self.A_thetadot = jnp.asarray(A_thetadot)
-		self.A_thetaddot = jnp.asarray(A_thetaddot)
-		self.A_thetadddot = jnp.asarray(A_thetadddot)
+
+		self.A_theta_single_dof = jnp.asarray(A_theta_single_dof)
+		self.A_thetadot_single_dof = jnp.asarray(A_thetadot_single_dof)
+		self.A_thetaddot_single_dof = jnp.asarray(A_thetaddot_single_dof)
+		self.A_thetadddot_single_dof = jnp.asarray(A_thetadddot_single_dof)
+
+		self.A_theta = np.asarray(A_theta)
+		self.A_thetadot = np.asarray(A_thetadot)
+		self.A_thetaddot = np.asarray(A_thetaddot)
+		self.A_thetadddot = np.asarray(A_thetadddot)
 		
-		self.compute_boundary_vec_batch = (jax.vmap(self.compute_boundary_vec_single, in_axes = (0)  ))
+		#vmap parrallelization takes place over first axis
+		self.compute_boundary_vec_batch_single_dof = (jax.vmap(self.compute_boundary_vec_single_dof, in_axes = (0)  ))
 
 		self.key= jax.random.PRNGKey(42)
 		self.maxiter_projection = maxiter_projection
@@ -134,6 +142,7 @@ class cem_planner():
 		self.num_pos_constraints = 2 * self.num_pos * num_dof
 		self.num_total_constraints = (self.num_vel_constraints + self.num_acc_constraints + 
 									 	self.num_jerk_constraints + self.num_pos_constraints)
+	
 		
 		self.num_total_constraints_per_dof = 2*(self.num_vel + self.num_acc + self.num_jerk + self.num_pos)
 
@@ -185,6 +194,12 @@ class cem_planner():
 		self.compute_rollout_batch = jax.vmap(self.compute_rollout_single, in_axes = (0, None, None))
 		self.compute_cost_batch = jax.vmap(self.compute_cost_single, in_axes = (0))
 
+		
+
+        #vmap parrallelization takes place over first axis
+		self.compute_projection_batched_over_dof = jax.vmap(self.compute_projection_single_dof, in_axes=(0, 0, 0, 0, 0))
+
+
 		self.print_info()
 
 
@@ -204,8 +219,7 @@ class cem_planner():
 
 		)
 
-
-  
+    
 	def get_A_traj(self):
 
 		# #This is valid while dealing with knots anfd projecting into pos,vel,acc space with Bernstein Polynomials
@@ -221,185 +235,191 @@ class cem_planner():
 
 	
 		return A_theta, A_thetadot, A_thetaddot, A_thetadddot	
+
+
+	def get_A_traj_single_dof(self):
+
+		# #This is valid while dealing with knots anfd projecting into pos,vel,acc space with Bernstein Polynomials
+		# A_theta = np.kron(np.identity(self.num_dof), self.P )
+		# A_thetadot = np.kron(np.identity(self.num_dof), self.Pdot )
+		# A_thetaddot = np.kron(np.identity(self.num_dof), self.Pddot )
+        
+        ##This is valid while not using knots and bernstein polynomials; directlly using velocity
+		A_theta_single_dof = np.kron(np.identity(1), self.Pint )
+		A_thetadot_single_dof = np.kron(np.identity(1), self.P )
+		A_thetaddot_single_dof = np.kron(np.identity(1), self.Pdot )
+		A_thetadddot_single_dof = np.kron(np.identity(1), self.Pddot )
+
 	
-	def get_A_p(self):
+		return A_theta_single_dof, A_thetadot_single_dof, A_thetaddot_single_dof, A_thetadddot_single_dof	
+	
+	def get_A_p_single_dof(self):
 		A_p = np.vstack(( self.Pint, -self.Pint))
-		A_p_ineq = np.kron(np.identity(self.num_dof), A_p )
+		A_p_ineq = np.kron(np.identity(1), A_p )
 		return A_p_ineq, A_p
 	
-	def get_A_v(self):
+	def get_A_v_single_dof(self):
 		A_v = np.vstack(( self.P, -self.P     ))
-		A_v_ineq = np.kron(np.identity(self.num_dof), A_v )
+		A_v_ineq = np.kron(np.identity(1), A_v )
 		return A_v_ineq, A_v
 
-	def get_A_a(self):
+	def get_A_a_single_dof(self):
 		A_a = np.vstack(( self.Pdot, -self.Pdot  ))
-		A_a_ineq = np.kron(np.identity(self.num_dof), A_a )
+		A_a_ineq = np.kron(np.identity(1), A_a )
 		return A_a_ineq, A_a
 	
-	def get_A_j(self):
+	def get_A_j_single_dof(self):
 		A_j = np.vstack(( self.Pddot, -self.Pddot  ))
-		A_j_ineq = np.kron(np.identity(self.num_dof), A_j )
+		A_j_ineq = np.kron(np.identity(1), A_j )
 		return A_j_ineq, A_j
 	
-	def get_A_eq(self):
+	def get_A_eq_single_dof(self):
 		#return np.kron(np.identity(self.num_dof), np.vstack((self.P[0], self.Pdot[0], self.Pddot[0], self.Pdot[-1], self.Pddot[-1]    )))
 		#return np.kron(np.identity(self.num_dof), np.vstack((self.Pint[0], self.P[0], self.Pdot[0], self.P[-1], self.Pdot[-1]  )))
-		return np.kron(np.identity(self.num_dof), self.P[0])
+		return np.kron(np.identity(1), self.P[0])
 		#return np.kron(np.identity(self.num_dof), np.vstack((self.Pint[0], self.P[0] )))
+		# 	
+
 	
-	def get_Q_inv(self, A_eq):
-		Q_inv = np.linalg.inv(np.vstack((np.hstack(( np.dot(self.A_projection.T, self.A_projection)+self.rho_ineq*jnp.dot(self.A_v_ineq.T, self.A_v_ineq)+self.rho_ineq*jnp.dot(self.A_a_ineq.T, self.A_a_ineq)+self.rho_ineq*jnp.dot(self.A_p_ineq.T, self.A_p_ineq), A_eq.T)  ), 
-									 np.hstack((A_eq, np.zeros((np.shape(A_eq)[0], np.shape(A_eq)[0])))))))	
-		# print('Q_inv', np.shape(Q_inv))
-		# print('A_eq', np.shape(A_eq))
-		
-		return Q_inv
-
 	@partial(jax.jit, static_argnums=(0,))
-	def compute_boundary_vec_single(self, state_term):
+	def compute_boundary_vec_single_dof(self, state_term):
 
-		num_eq_constraint = int(jnp.shape(state_term)[0]/self.num_dof)
+		print("state_term", state_term.shape)
+
+		num_eq_constraint_per_dof = int(jnp.shape(state_term)[0])
 
 		# jax.debug.print("num_eq_constraint: {}", num_eq_constraint)
 
-		b_eq_term = state_term.reshape( num_eq_constraint, self.num_dof).T
-		b_eq_term = b_eq_term.reshape(self.num_dof* num_eq_constraint)
+		b_eq_term = state_term.reshape( num_eq_constraint_per_dof).T
+		b_eq_term = b_eq_term.reshape(num_eq_constraint_per_dof)
 		return b_eq_term
+	
 
+	
 	@partial(jax.jit, static_argnums=(0,))
-	def compute_feasible_control(self, lamda_init, s_init, b_eq_term, xi_samples, init_pos):
+	def compute_feasible_control_single_dof(self, lamda_init_single_dof, s_init_single_dof, 
+										 b_eq_term_single_dof, xi_samples_single_dof, 
+										 init_pos_single_dof):
 		b_vel = jnp.hstack((
-			self.v_max * jnp.ones((self.num_batch, self.num_vel_constraints // 2)),
-			self.v_max * jnp.ones((self.num_batch, self.num_vel_constraints // 2))
+			self.v_max * jnp.ones((self.num_batch, self.num_vel_constraints // (2*self.num_dof))),
+			self.v_max * jnp.ones((self.num_batch, self.num_vel_constraints // (2*self.num_dof)))
 		))
 
 		b_acc = jnp.hstack((
-			self.a_max * jnp.ones((self.num_batch, self.num_acc_constraints // 2)),
-			self.a_max * jnp.ones((self.num_batch, self.num_acc_constraints // 2))
+			self.a_max * jnp.ones((self.num_batch, self.num_acc_constraints // (2*self.num_dof))),
+			self.a_max * jnp.ones((self.num_batch, self.num_acc_constraints // (2*self.num_dof)))
 		))
 
 		b_jerk = jnp.hstack((
-			self.j_max * jnp.ones((self.num_batch, self.num_jerk_constraints // 2)),
-			self.j_max * jnp.ones((self.num_batch, self.num_jerk_constraints // 2))
+			self.j_max * jnp.ones((self.num_batch, self.num_jerk_constraints // (2*self.num_dof))),
+			self.j_max * jnp.ones((self.num_batch, self.num_jerk_constraints // (2*self.num_dof)))
 		))
         
-		init_pos_batch = jnp.tile(init_pos[None, :], (self.num_batch, 1))  # (num_batch, 6)
+
+		init_pos_single_dof_batch = jnp.tile(init_pos_single_dof, (self.num_batch, 1))  # (num_batch, 1)
         
 		# Calculate bounds for each joint and each batch
     	# Upper bounds: p_max - init_pos, Lower bounds: p_max + init_pos (assuming symmetric limits)
-		b_pos_upper = (self.p_max - init_pos_batch)  # shape (num_batch, 6)
-		b_pos_lower = (self.p_max + init_pos_batch)  # shape (num_batch, 6)
+		b_pos_upper = (self.p_max - init_pos_single_dof_batch)  # shape (num_batch, 1)
+		b_pos_lower = (self.p_max + init_pos_single_dof_batch)  # shape (num_batch, 1)
         
 		
 		# Expand to include time steps
-		b_pos_upper_expanded = jnp.tile(b_pos_upper[:, :, None], (1, 1, self.num_pos_constraints // (self.num_dof * 2)))  # (num_batch, 6, num_time_steps)
-		b_pos_lower_expanded = jnp.tile(b_pos_lower[:, :, None], (1, 1, self.num_pos_constraints // (self.num_dof * 2)))  # (num_batch, 6, num_time_steps)
+		b_pos_upper_expanded = jnp.tile(b_pos_upper[:, :, None], (1, 1, self.num_pos_constraints // (self.num_dof * 2)))  # (num_batch, 1, num_pos_constraints/2)
+		b_pos_lower_expanded = jnp.tile(b_pos_lower[:, :, None], (1, 1, self.num_pos_constraints // (self.num_dof * 2)))  # (num_batch, 1, num_pos_constraints/2)
 		
 		# Stack upper and lower bounds
-		b_pos_stacked = jnp.concatenate([b_pos_upper_expanded, b_pos_lower_expanded], axis=2)  # (num_batch, 6, 2*num_time_steps)
+		b_pos_stacked = jnp.concatenate([b_pos_upper_expanded, b_pos_lower_expanded], axis=2)  # (num_batch, 1, num_pos_constraints)
 		
 		# Reshape to final form: (num_batch, total_pos_constraints)
 		b_pos = b_pos_stacked.reshape((self.num_batch, -1))  # shape: (num_batch, self.num_pos_constraints)
         
-
-		b_control = jnp.hstack((b_vel, b_acc, b_jerk, b_pos))
+		b_control_single_dof = jnp.hstack((b_vel, b_acc, b_jerk, b_pos))
 
 		# Augmented bounds with slack variables
-		b_control_aug = b_control - s_init
+		b_control_aug_single_dof = b_control_single_dof - s_init_single_dof
 
 		
 
 		# Cost matrix
 		cost = (
-			jnp.dot(self.A_projection.T, self.A_projection) +
-			self.rho_ineq * jnp.dot(self.A_control.T, self.A_control)
+			jnp.dot(self.A_projection_single_dof.T, self.A_projection_single_dof) +
+			self.rho_ineq * jnp.dot(self.A_control_single_dof.T, self.A_control_single_dof)
 		)
 
 		# KKT system matrix
 		cost_mat = jnp.vstack((
-			jnp.hstack((cost, self.A_eq.T)),
-			jnp.hstack((self.A_eq, jnp.zeros((self.A_eq.shape[0], self.A_eq.shape[0]))))
+			jnp.hstack((cost, self.A_eq_single_dof.T)),
+			jnp.hstack((self.A_eq_single_dof, jnp.zeros((self.A_eq_single_dof.shape[0], self.A_eq_single_dof.shape[0]))))
 		))
 
 		# Linear cost term
 		lincost = (
-			-lamda_init -
-			jnp.dot(self.A_projection.T, xi_samples.T).T -
-			self.rho_ineq * jnp.dot(self.A_control.T, b_control_aug.T).T
+			-lamda_init_single_dof -
+			jnp.dot(self.A_projection_single_dof.T, xi_samples_single_dof.T).T -
+			self.rho_ineq * jnp.dot(self.A_control_single_dof.T, b_control_aug_single_dof.T).T
 		)
 
 		# Solve KKT system
-		sol = jnp.linalg.solve(cost_mat, jnp.hstack((-lincost, b_eq_term)).T).T
+		sol = jnp.linalg.solve(cost_mat, jnp.hstack((-lincost, b_eq_term_single_dof)).T).T
 
-		# print('sol', sol.shape)
+		print("cost_mat.shape:", cost_mat.shape)
+		print("lincost.shape:", lincost.shape)
+		print("b_eq_term_single_dof.shape:", b_eq_term_single_dof.shape)
+
+		print("sol.shape:", sol.shape)
 
 		# Extract primal solution
-		xi_projected = sol[:, :self.nvar]
+		xi_projected = sol[:, :self.nvar_single]
 
 		# Update slack variables
 		s = jnp.maximum(
-			jnp.zeros((self.num_batch, self.num_total_constraints)),
-			-jnp.dot(self.A_control, xi_projected.T).T + b_control
+			jnp.zeros((self.num_batch, self.num_total_constraints_per_dof)),
+			-jnp.dot(self.A_control_single_dof, xi_projected.T).T + b_control_single_dof
 		)
 
 		# Compute residual
-		res_vec = jnp.dot(self.A_control, xi_projected.T).T - b_control + s
+		res_vec = jnp.dot(self.A_control_single_dof, xi_projected.T).T - b_control_single_dof + s
 		res_norm = jnp.linalg.norm(res_vec, axis=1)
 
 		# Update Lagrange multipliers
-		lamda = lamda_init - self.rho_ineq * jnp.dot(self.A_control.T, res_vec.T).T
+		lamda = lamda_init_single_dof - self.rho_ineq * jnp.dot(self.A_control_single_dof.T, res_vec.T).T
 
 		return xi_projected, s, res_norm, lamda
 	
 
-
 	@partial(jax.jit, static_argnums=(0,))
-	def compute_projection(self, xi_samples, state_term, lamda_init, s_init, init_pos):
+	def compute_projection_single_dof(self, 
+								       xi_samples_single_dof, 
+								       state_term_single_dof, 
+									   lamda_init_single_dof, 
+									   s_init_single_dof, 
+									   init_pos_single_dof):
+		# state_term_single_dof: (B, K) → flatten across batch
+		print("state_term_single_dof", state_term_single_dof.shape)
+		print("state_term_single_dof", state_term_single_dof)
+		b_eq_term = self.compute_boundary_vec_batch_single_dof(state_term_single_dof)  # should become (B, K), flattened
 
-		b_eq_term = self.compute_boundary_vec_batch(state_term)
+		xi_projected_init_single_dof = xi_samples_single_dof
 
-		xi_projected_init = xi_samples
-
-		# jax.debug.print("b_eq_term {}", jnp.shape(b_eq_term))
-
-		# #Instead of zero, use MLP outputs as initial guesses
-		# s_v = jnp.zeros((self.num_batch, 2*self.num_dof*self.num   ))
-		# s_a = jnp.zeros((self.num_batch, 2*self.num_dof*self.num   ))
-		# s_p = jnp.zeros((self.num_batch, 2*self.num_dof*self.num   ))
-		# lamda_v = jnp.zeros(( self.num_batch, self.nvar  ))
-		# lamda_a = jnp.zeros(( self.num_batch, self.nvar  ))
- 		# lamda_p = jnp.zeros(( self.num_batch, self.nvar  ))
-		#Define scan function (following original structure)
-		primal_residuals = []
-		fixed_point_residuals = []
 		def lax_custom_projection(carry, idx):
-
-			# xi_projected init is not required
 			_, lamda, s = carry
-			lamda_prev = lamda
-			s_prev = s
+			lamda_prev, s_prev = lamda, s
 			
-			# Perform projection step
-			primal_sol, s, res_projection, lamda = self.compute_feasible_control(
-				lamda, s, b_eq_term, xi_samples, init_pos)
+			primal_sol, s, res_projection, lamda = self.compute_feasible_control_single_dof(lamda, 
+																		s, b_eq_term, xi_samples_single_dof, 
+																		init_pos_single_dof)
 			
-			
-			# Compute residuals
 			primal_residual = res_projection
-			fixed_point_residual = (jnp.linalg.norm(lamda_prev - lamda, axis=1) +
-								jnp.linalg.norm(s_prev - s, axis=1))
-			
-
-			
+			fixed_point_residual = (
+				jnp.linalg.norm(lamda_prev - lamda, axis=1) +
+				jnp.linalg.norm(s_prev - s, axis=1)
+			)
 			return (primal_sol, lamda, s), (primal_residual, fixed_point_residual)
-		
 
-		
-		# Initialize carry
-		carry_init = (xi_projected_init, lamda_init, s_init)
+		carry_init = (xi_projected_init_single_dof, lamda_init_single_dof, s_init_single_dof)
 
-		# Run scan
+
 		carry_final, res_tot = jax.lax.scan(
 			lax_custom_projection,
 			carry_init,
@@ -409,13 +429,8 @@ class cem_planner():
 		primal_sol, lamda, s = carry_final
 		primal_residuals, fixed_point_residuals = res_tot
 
-		primal_residuals = jnp.stack(primal_residuals)
-		fixed_point_residuals = jnp.stack(fixed_point_residuals)
-
-		# for i in range(0, self.maxiter_projection):
-		# 	primal_sol, s_v, s_a, s_p,  lamda_v, lamda_a, lamda_p, res_projection  = self.compute_feasible_control(lamda_init, s_init, b_eq_term,  xi_samples)
-	 
 		return primal_sol, primal_residuals, fixed_point_residuals
+
 
 	@partial(jax.jit, static_argnums=(0,))
 	def mjx_step(self, mjx_data, thetadot_single):
@@ -434,6 +449,8 @@ class cem_planner():
 
 	@partial(jax.jit, static_argnums=(0,))
 	def compute_rollout_single(self, thetadot, init_pos, init_vel):
+		print("Computing rollout")
+		print("thetadot.shape", thetadot.shape)
 		mjx_data = self.mjx_data
 		qvel = mjx_data.qvel.at[:self.num_dof].set(init_vel)
 		qpos = mjx_data.qpos.at[:self.num_dof].set(init_pos)
@@ -513,13 +530,63 @@ class cem_planner():
 		xi_cov_prev = xi_cov
 
 		#xi_samples, key = self.compute_xi_samples(key, xi_mean, xi_cov)
-		xi_filtered, primal_residuals, fixed_point_residuals = self.compute_projection(xi_samples, state_term, lamda_init=lamda_init, s_init=s_init, init_pos=init_pos)
+		
         
+		print("xi_samples : {}".format(xi_samples.shape))
+		print("state_term : {}".format(state_term.shape))
+		print("lamda_init : {}".format(lamda_init.shape))
+		print("s_init : {}".format(s_init.shape))
+		print("init_pos : {}".format(init_pos.shape))
+
+		xi_samples_reshaped = xi_samples.reshape(self.num_batch, self.num ,self.num_dof)
+		xi_samples_batched_over_dof = jnp.transpose(xi_samples_reshaped, (2, 0, 1)) # shape: (DoF, B, num)
+
+		state_term_reshaped = state_term.reshape(self.num_batch, 1, self.num_dof)
+		state_term_batched_over_dof = jnp.transpose(state_term_reshaped, (2, 0, 1)) #Shape: (DoF, B, 1)
+
+		lamda_init_reshaped = lamda_init.reshape(self.num_batch, self.num ,self.num_dof)
+		lamda_init_batched_over_dof = jnp.transpose(lamda_init_reshaped, (2, 0, 1)) # shape: (DoF, B, num)
+
+		s_init_reshaped = s_init.reshape(self.num_batch, self.num_total_constraints_per_dof ,self.num_dof)
+		s_init_batched_over_dof = jnp.transpose(s_init_reshaped, (2, 0, 1)) # shape: (DoF, B, num_total_constraints_per_dof)
+
+		print("xi_samples_batched_over_dof : {}".format(xi_samples_batched_over_dof.shape))
+		print("state_term_batched_over_dof : {}".format(state_term_batched_over_dof.shape))
+		print("lamda_init_batched_over_dof : {}".format(lamda_init_batched_over_dof.shape))
+		print("s_init_batched_over_dof : {}".format(s_init_batched_over_dof.shape))
+		print("init_pos : {}".format(init_pos.shape))
+
+
+		
+        # #PAss all arguments as positional arguments; not keyword arguments
+		xi_filtered, primal_residuals, fixed_point_residuals = self.compute_projection_batched_over_dof(
+			                                                     xi_samples_batched_over_dof, 
+														         state_term_batched_over_dof, 
+																 lamda_init_batched_over_dof, 
+																 s_init_batched_over_dof, 
+																 init_pos)
+		
+		xi_filtered = xi_filtered.reshape(self.num_batch, self.num* self.num_dof)
+		
+		primal_residuals = jnp.linalg.norm(primal_residuals, axis = 0)
+		fixed_point_residuals = jnp.linalg.norm(fixed_point_residuals, axis = 0)
+		
+		print("xi_filtered : {}".format(xi_filtered.shape))
+		print("primal_residuals : {}".format(primal_residuals.shape))
+		print("fixed_point_residuals : {}".format(fixed_point_residuals.shape))
+
+		#xi_filtered = xi_filtered.reshape(self.num_batch, self.num* self.num_dof)
+
+		
+		
 		avg_res_primal = jnp.sum(primal_residuals, axis = 0)/self.maxiter_projection
     	
 		avg_res_fixed_point = jnp.sum(fixed_point_residuals, axis = 0)/self.maxiter_projection
 
 		thetadot = jnp.dot(self.A_thetadot, xi_filtered.T).T
+
+		print("thetadot : {}".format(thetadot.shape))
+
 
 		theta, eef_pos, eef_rot, collision = self.compute_rollout_batch(thetadot, init_pos, init_vel)
 
@@ -625,7 +692,7 @@ def main():
 	#opt_class = cem_planner(num_dof, num_batch, w_pos=3, num_elite=0.1, maxiter_cem=30)	
 	opt_class = cem_planner(num_dof=6, num_batch=2000, num_steps=50, maxiter_cem=1,
                            w_pos=1, w_rot=0.5, w_col=10, num_elite=0.05, timestep=0.05,
-						   maxiter_projection=20, max_joint_pos = np.pi, max_joint_vel=2.0, max_joint_acc=5.0, max_joint_jerk=10.0)
+						   maxiter_projection=5, max_joint_pos = np.pi, max_joint_vel=2.0, max_joint_acc=5.0, max_joint_jerk=10.0)
 
 	start_time_comp_cem = time.time()
 	xi_mean = jnp.zeros(opt_class.nvar)

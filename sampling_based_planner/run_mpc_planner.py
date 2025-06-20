@@ -1,6 +1,6 @@
 
 import numpy as np
-from mpc_planner2 import run_cem_planner
+from mpc_planner import run_cem_planner
 import os
 import mujoco
 

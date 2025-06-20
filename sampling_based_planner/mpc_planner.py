@@ -21,6 +21,12 @@ from torch.utils.data import Dataset, DataLoader
 import contextlib
 from io import StringIO
 
+import sys
+#Enable python to search for modules in the parent directory
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from ik_based_planner.ik_solver import InverseKinematicsSolver
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using {device} device")
 
@@ -236,6 +242,9 @@ def run_cem_planner(
     num_elite=None,
     timestep=None,
     initial_qpos=None,
+    ik_pos_thresh=None,
+    ik_rot_thresh=None,
+    collision_free_ik_dt=None,
     target_names=None,
     show_viewer=None,
     cam_distance=None,
@@ -406,10 +415,6 @@ def run_cem_planner(
                         xi_samples
                     )
 
-                    # Apply control
-                    thetadot = np.mean(best_vels[1:int(num_steps*0.9)], axis=0)
-                    data.qvel[:num_dof] = thetadot
-                    mujoco.mj_step(model, data)
 
                     # Check target convergence
                     current_cost_g = np.linalg.norm(data.site_xpos[cem.tcp_id] - target_pos)   
@@ -425,6 +430,32 @@ def run_cem_planner(
                         else:
                             target_idx += 1
                         current_target = target_names[target_idx]
+                    
+                    #ACtivate  collision free IK if cost position/rotation is less than 2*threshold
+                    if current_cost_g < ik_pos_thresh and current_cost_r < ik_rot_thresh:
+                        collision_free_ik = True
+                    else:
+                        collision_free_ik = False
+
+                    if collision_free_ik:
+                        #Collision Free IK
+                        ik_solver = InverseKinematicsSolver(cem.model_path, data.qpos[:num_dof])
+
+                        ik_solver.set_target(target_pos, target_quat)
+
+                        print("\n" + "-" * 40)
+                        print(">>> COLLISION-FREE IK IS ACTIVATED <<<")
+                        print("-" * 40 + "\n")
+                        
+                        # Apply control as per MPC coupled with  CEM
+                        thetadot = ik_solver.solve(dt=collision_free_ik_dt)
+
+                    else:    
+
+                        # Apply control as per MPC coupled with  CEM
+                        thetadot = np.mean(best_vels[1:int(num_steps*0.9)], axis=0)
+                    data.qvel[:num_dof] = thetadot
+                    mujoco.mj_step(model, data)    
 
                     # Store data
                     cost_g_list.append(best_cost_g)
@@ -459,11 +490,11 @@ def run_cem_planner(
 
                     print(f'Step Time: {"%.0f"%((time.time() - start_time)*1000)}ms | Cost g: {"%.2f"%(float(current_cost_g))}'
                         f' | Cost r: {"%.2f"%(float(current_cost_r))} | Cost c: {"%.2f"%(float(best_cost_c))} | Cost: {current_cost}')
-                    print(f'eef_quat: {data.xquat[cem.hande_id]}')
-                    print(f'eef_pos', data.site_xpos[cem.tcp_id])
-                    print(f'target: {current_target}')
-                    print(f'target_pos', target_pos)
-                    print(f'timetstep_counter:{timestep_counter}')
+                    # print(f'eef_quat: {data.xquat[cem.hande_id]}')
+                    # print(f'eef_pos', data.site_xpos[cem.tcp_id])
+                    # print(f'target: {current_target}')
+                    # print(f'target_pos', target_pos)
+                    # print(f'timetstep_counter:{timestep_counter}')
 
                     # Update viewer
                     viewer_.sync()

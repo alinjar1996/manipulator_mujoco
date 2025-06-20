@@ -524,17 +524,6 @@ class cem_planner():
 
 		#xi_samples, key = self.compute_xi_samples(key, xi_mean, xi_cov)
         #xi_samples shape = (num_batch, num*num_dof)
-		# xi_samples_reshaped = xi_samples.reshape(self.num_batch, self.num ,self.num_dof)
-		# xi_samples_batched_over_dof = jnp.transpose(xi_samples_reshaped, (2, 0, 1)) # shape: (DoF, B, num)
-
-		# state_term_reshaped = state_term.reshape(self.num_batch, 1, self.num_dof)
-		# state_term_batched_over_dof = jnp.transpose(state_term_reshaped, (2, 0, 1)) #Shape: (DoF, B, 1)
-
-		# lamda_init_reshaped = lamda_init.reshape(self.num_batch, self.num ,self.num_dof)
-		# lamda_init_batched_over_dof = jnp.transpose(lamda_init_reshaped, (2, 0, 1)) # shape: (DoF, B, num)
-
-		# s_init_reshaped = s_init.reshape(self.num_batch, self.num_total_constraints_per_dof ,self.num_dof)
-		# s_init_batched_over_dof = jnp.transpose(s_init_reshaped, (2, 0, 1)) # shape: (DoF, B, num_total_constraints_per_dof)
 
 		xi_samples_reshaped = xi_samples.reshape(self.num_batch, self.num_dof, self.num)
 		xi_samples_batched_over_dof = jnp.transpose(xi_samples_reshaped, (1, 0, 2)) # shape: (DoF, B, num)

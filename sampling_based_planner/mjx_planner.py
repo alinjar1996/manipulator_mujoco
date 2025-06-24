@@ -100,13 +100,7 @@ class cem_planner():
 		A_eq_single_dof = self.get_A_eq_single_dof()
 		self.A_eq_single_dof = jnp.asarray(A_eq_single_dof)
 
-		A_theta_single_dof, A_thetadot_single_dof, A_thetaddot_single_dof, A_thetadddot_single_dof = self.get_A_traj_single_dof()
 		A_theta, A_thetadot, A_thetaddot, A_thetadddot = self.get_A_traj()
-
-		self.A_theta_single_dof = jnp.asarray(A_theta_single_dof)
-		self.A_thetadot_single_dof = jnp.asarray(A_thetadot_single_dof)
-		self.A_thetaddot_single_dof = jnp.asarray(A_thetaddot_single_dof)
-		self.A_thetadddot_single_dof = jnp.asarray(A_thetadddot_single_dof)
 
 		self.A_theta = np.asarray(A_theta)
 		self.A_thetadot = np.asarray(A_thetadot)
@@ -234,21 +228,6 @@ class cem_planner():
 		return A_theta, A_thetadot, A_thetaddot, A_thetadddot	
 
 
-	def get_A_traj_single_dof(self):
-
-		# #This is valid while dealing with knots anfd projecting into pos,vel,acc space with Bernstein Polynomials
-		# A_theta = np.kron(np.identity(self.num_dof), self.P )
-		# A_thetadot = np.kron(np.identity(self.num_dof), self.Pdot )
-		# A_thetaddot = np.kron(np.identity(self.num_dof), self.Pddot )
-        
-        ##This is valid while not using knots and bernstein polynomials; directlly using velocity
-		A_theta_single_dof = np.kron(np.identity(1), self.Pint )
-		A_thetadot_single_dof = np.kron(np.identity(1), self.P )
-		A_thetaddot_single_dof = np.kron(np.identity(1), self.Pdot )
-		A_thetadddot_single_dof = np.kron(np.identity(1), self.Pddot )
-
-	
-		return A_theta_single_dof, A_thetadot_single_dof, A_thetaddot_single_dof, A_thetadddot_single_dof	
 	
 	def get_A_p_single_dof(self):
 		A_p = np.vstack(( self.Pint, -self.Pint))
@@ -460,25 +439,17 @@ class cem_planner():
 	@partial(jax.jit, static_argnums=(0,))
 	def compute_cost_single(self, thetadot, eef_pos, eef_rot, collision, target_pos, target_rot):
 		cost_g_ = jnp.linalg.norm(eef_pos - target_pos, axis=1)
-		cost_g = cost_g_[-1] + jnp.sum(cost_g_[:-1])*1
+		cost_g = cost_g_[-1] + jnp.sum(cost_g_[:-1])
 
 		dot_product = jnp.abs(jnp.dot(eef_rot/jnp.linalg.norm(eef_rot, axis=1).reshape(1, self.num).T, target_rot/jnp.linalg.norm(target_rot)))
 		dot_product = jnp.clip(dot_product, -1.0, 1.0)
 		cost_r_ = 2 * jnp.arccos(dot_product)
-		cost_r = cost_r_[-1] + jnp.sum(cost_r_[:-1])*1
-
+		cost_r = cost_r_[-1] + jnp.sum(cost_r_[:-1])
 
 		y = 0.005
 		collision = collision.T
-
-
 		g = -collision[:, 1:]+collision[:, :-1]-y*collision[:, :-1]
-
-
 		cost_c = jnp.sum(jnp.max(g.reshape(g.shape[0], g.shape[1], 1), axis=-1, initial=0)) + jnp.sum(collision < 0)
-
-		
-
 		cost = self.cost_weights['w_pos']*cost_g + self.cost_weights['w_rot']*cost_r + self.cost_weights['w_col']*cost_c
 		return cost, cost_g, cost_r, cost_c
 	

@@ -433,7 +433,7 @@ def run_cem_planner(
                     
                     #ACtivate  collision free IK if cost position/rotation is less than 2*threshold
                     if current_cost_g < ik_pos_thresh and current_cost_r < ik_rot_thresh:
-                        collision_free_ik = True
+                        collision_free_ik = False
                     else:
                         collision_free_ik = False
 

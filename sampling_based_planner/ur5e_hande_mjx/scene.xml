@@ -24,14 +24,14 @@
   </worldbody>
 
   <contact>
-    <exclude body1="hande" body2="target_0"/>
+    <!-- <exclude body1="hande" body2="target_0"/>
     <exclude body1="wrist_3_link_1" body2="target_0"/>
     <exclude body1="wrist_2_link_1" body2="target_0"/>
     <exclude body1="wrist_1_link_1" body2="target_0"/>
     <exclude body1="forearm_link_1" body2="target_0"/>
     <exclude body1="upper_arm_link_1" body2="target_0"/>
     <exclude body1="shoulder_link_1" body2="target_0"/>
-    <exclude body1="base_1" body2="target_0"/>
+    <exclude body1="base_1" body2="target_0"/> -->
 
     <!-- <exclude body1="hande" body2="target_1"/>
     <exclude body1="wrist_3_link_1" body2="target_1"/>

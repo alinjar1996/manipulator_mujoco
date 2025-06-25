@@ -11,7 +11,7 @@ from collision_free_ik.mink.tasks.frame_task import FrameTask
 class InverseKinematicsSolver:
     def __init__(self, model, joint_positions=None):
         # Load MuJoCo model and data
-        self.model = model #mujoco.MjModel.from_xml_path(xml_path)
+        self.model = model 
         self.data = mujoco.MjData(self.model)
 
         # Set initial joint configuration
@@ -27,7 +27,7 @@ class InverseKinematicsSolver:
             frame_name="tcp",
             frame_type="site",
             position_cost=1.0,
-            orientation_cost=0.5,
+            orientation_cost=1.0,
             gain=1.0,
             lm_damping=0.0
         )

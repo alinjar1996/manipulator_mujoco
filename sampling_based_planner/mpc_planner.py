@@ -337,6 +337,7 @@ def run_cem_planner(
     target_idx = 0
     current_target = target_names[target_idx]
 
+
     if show_viewer:
         with viewer.launch_passive(model, data) as viewer_:
             viewer_.cam.distance = cam_distance
@@ -414,7 +415,6 @@ def run_cem_planner(
                         s_init,
                         xi_samples
                     )
-
 
                     # Check target convergence
                     current_cost_g = np.linalg.norm(data.site_xpos[cem.tcp_id] - target_pos)   

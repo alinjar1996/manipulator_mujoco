@@ -452,13 +452,15 @@ class cem_planner():
 		cost_r_ = 2 * jnp.arccos(dot_product)
 		cost_r = cost_r_[-1] + jnp.sum(cost_r_[:-1])
 
-		y = 0.005
+		y = 0.4
+
 		collision = collision.T
 		# jax.debug.print("cost_g in function: {}", jnp.shape(cost_g))
 		# jax.debug.print("cost_r in function: {}", jnp.shape(cost_r))
 
 
-		g = -collision[:, 1:]+collision[:, :-1]-y*collision[:, :-1]
+		# g = -collision[:, 1:]+collision[:, :-1]-y*collision[:, :-1]
+		g = -collision[:, 1:]+(1 - y)*collision[:, :-1]
 
 		# jax.debug.print("g in function: {}", jnp.shape(g))
 		#cost_c = jnp.sum(jnp.max(g.reshape(g.shape[0], g.shape[1], 1), axis=-1, initial=0)) + jnp.sum(collision < 0)
@@ -590,6 +592,7 @@ class cem_planner():
 		xi_samples
 		):
 
+
 		theta_init = jnp.tile(init_pos, (self.num_batch, 1))
 		thetadot_init = jnp.tile(init_vel, (self.num_batch, 1))
 		thetaddot_init = jnp.tile(init_acc, (self.num_batch, 1))
@@ -671,8 +674,6 @@ def main():
 	target_rot = jnp.array([0.0, 0.0, 0.0, 1.0])
 	s_init = jnp.zeros((opt_class.num_batch, opt_class.num_total_constraints))
 	lamda_init = jnp.zeros((opt_class.num_batch, opt_class.nvar))
-	
-
 	
 	cost, best_cost_g, best_cost_r, best_cost_c, best_vels, best_traj, \
 	xi_mean, xi_cov, thd_all, th_all, avg_primal_res, avg_fixed_res, \

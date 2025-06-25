@@ -9,10 +9,10 @@ inference = False
 target_names=["target_1","target_2", "target_0", "home"]
 position_threshold=0.06  
 rotation_threshold=0.1  
-ik_pos_thresh = 2*position_threshold
-ik_rot_thresh = 2*rotation_threshold
+ik_pos_thresh = 1.0*position_threshold
+ik_rot_thresh = 1.0*rotation_threshold
 timestep = 0.05
-collision_free_ik_dt = 10*timestep
+collision_free_ik_dt = 5*timestep
 
 #Customized parameters
 results = run_cem_planner(
@@ -27,7 +27,7 @@ results = run_cem_planner(
     maxiter_projection=5,   # Projection Filter iterations: Use More iterations for better Filtering
     w_pos=3.0,      # weight on position error
     w_rot=0.5,       # weight on rotation error
-    w_col= 50000.0, #5000.0,      # weight on collision avoidance
+    w_col= 5000.0, #5000.0,      # weight on collision avoidance
     
 
     #Collision free IK parameters

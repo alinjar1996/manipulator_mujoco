@@ -452,7 +452,8 @@ class cem_planner():
 		cost_r_ = 2 * jnp.arccos(dot_product)
 		cost_r = cost_r_[-1] + jnp.sum(cost_r_[:-1])
 
-		y = 0.4
+		# HIgher y implies stricter condition on g to be positive 
+		y = 0.2
 
 		collision = collision.T
 		# jax.debug.print("cost_g in function: {}", jnp.shape(cost_g))

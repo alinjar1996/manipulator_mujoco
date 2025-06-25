@@ -439,7 +439,7 @@ def run_cem_planner(
 
                     if collision_free_ik:
                         #Collision Free IK
-                        ik_solver = InverseKinematicsSolver(cem.model_path, data.qpos[:num_dof])
+                        ik_solver = InverseKinematicsSolver(cem.model, data.qpos[:num_dof])
 
                         ik_solver.set_target(target_pos, target_quat)
 

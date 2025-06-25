@@ -9,9 +9,9 @@ from collision_free_ik.mink.tasks.frame_task import FrameTask
 
 
 class InverseKinematicsSolver:
-    def __init__(self, xml_path, joint_positions=None):
+    def __init__(self, model, joint_positions=None):
         # Load MuJoCo model and data
-        self.model = mujoco.MjModel.from_xml_path(xml_path)
+        self.model = model #mujoco.MjModel.from_xml_path(xml_path)
         self.data = mujoco.MjData(self.model)
 
         # Set initial joint configuration

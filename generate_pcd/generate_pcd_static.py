@@ -3,8 +3,21 @@ import numpy as np
 import open3d as o3d
 import os
 
+from pathlib import Path
+
+#"scene_without_robot.xml" for scene excluding robot
+#"scene.xml" for scene including robot
+
+# Load the XML file
+# Get the absolute path relative to the script's location
+xml_path = Path(__file__).parent / "../sampling_based_planner/ur5e_hande_mjx/scene_without_robot.xml"
+xml_path = xml_path.resolve()  # Converts to absolute path, resolving ".."
+xml_path = str(xml_path)  # Convert to string for mujoco
+# Now xml_path is a pathlib.Path object pointing to the correct file
+
 # Load MuJoCo model
-xml_path = "./sampling_based_planner/ur5e_hande_mjx/scene.xml"
+
+
 model = mujoco.MjModel.from_xml_path(xml_path)
 data = mujoco.MjData(model)
 
@@ -67,7 +80,7 @@ o3d.visualization.draw_geometries([pcd_o3d],
 
 # Save PCD file
 os.makedirs("pcd_data", exist_ok=True)
-output_path = "pcd_data/output_pointcloud_unpacked_rgb.pcd"
+output_path = "pcd_data/output_scene_without_robot_unpacked_rgb.pcd"
 with open(output_path, "w") as f:
     f.write("# .PCD v0.7 - Point Cloud Data file format\n")
     f.write("VERSION 0.7\n")

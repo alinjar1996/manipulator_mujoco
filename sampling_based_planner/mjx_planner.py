@@ -183,7 +183,7 @@ class cem_planner():
 		self.tcp_id = self.model.site(name="tcp").id
 
 		self.compute_rollout_batch = jax.vmap(self.compute_rollout_single, in_axes = (0, None, None))
-		self.compute_cost_batch = jax.vmap(self.compute_cost_single, in_axes = (0))
+		self.compute_cost_batch = jax.vmap(self.compute_cost_single, in_axes = (0, 0, 0, 0, 0))
 
 		
 
@@ -437,7 +437,13 @@ class cem_planner():
 		return theta.T.flatten(), eef_pos, eef_rot, collision
 	
 	@partial(jax.jit, static_argnums=(0,))
-	def compute_cost_single(self, thetadot, eef_pos, eef_rot, collision, target_pos, target_rot):
+	def compute_cost_single(self, eef_pos, eef_rot, collision, target_pos, target_rot):
+		# jax.debug.print("collision in function: {}", jnp.shape(collision))
+		# jax.debug.print("eef_pos in function: {}", jnp.shape(eef_pos))
+		# jax.debug.print("eef_rot in function: {}", jnp.shape(eef_rot))
+		# jax.debug.print("target_pos in function: {}", jnp.shape(target_pos))
+		# jax.debug.print("target_rot in function: {}", jnp.shape(target_rot))
+        		
 		cost_g_ = jnp.linalg.norm(eef_pos - target_pos, axis=1)
 		cost_g = cost_g_[-1] + jnp.sum(cost_g_[:-1])
 
@@ -448,9 +454,16 @@ class cem_planner():
 
 		y = 0.005
 		collision = collision.T
+		# jax.debug.print("cost_g in function: {}", jnp.shape(cost_g))
+		# jax.debug.print("cost_r in function: {}", jnp.shape(cost_r))
+
+
 		g = -collision[:, 1:]+collision[:, :-1]-y*collision[:, :-1]
 		cost_c = jnp.sum(jnp.max(g.reshape(g.shape[0], g.shape[1], 1), axis=-1, initial=0)) + jnp.sum(collision < 0)
 		cost = self.cost_weights['w_pos']*cost_g + self.cost_weights['w_rot']*cost_r + self.cost_weights['w_col']*cost_c
+
+		# jax.debug.print("cost_c in function: {}", jnp.shape(cost_c))
+
 		return cost, cost_g, cost_r, cost_c
 	
 	@partial(jax.jit, static_argnums=(0, ))
@@ -533,8 +546,15 @@ class cem_planner():
 
 
 		theta, eef_pos, eef_rot, collision = self.compute_rollout_batch(thetadot, init_pos, init_vel)
+       
+		# jax.debug.print("eef_pos: {}", jnp.shape(eef_pos))
+		# jax.debug.print("eef_rot: {}", jnp.shape(eef_rot))
+		# jax.debug.print("collision: {}", jnp.shape(collision))
+		# jax.debug.print("theta: {}", jnp.shape(theta))
+		# jax.debug.print("target_pos: {}", jnp.shape(target_pos))
+		# jax.debug.print("target_rot: {}", jnp.shape(target_rot))
 
-		cost_batch, cost_g_batch, cost_r_batch, cost_c_batch = self.compute_cost_batch(thetadot, eef_pos, eef_rot, collision, target_pos, target_rot)
+		cost_batch, cost_g_batch, cost_r_batch, cost_c_batch = self.compute_cost_batch(eef_pos, eef_rot, collision, target_pos, target_rot)
 
 		xi_ellite, idx_ellite, cost_ellite = self.compute_ellite_samples(cost_batch, xi_samples)
 		xi_mean, xi_cov = self.compute_mean_cov(cost_ellite, xi_mean_prev, xi_cov_prev, xi_ellite)

@@ -459,7 +459,14 @@ class cem_planner():
 
 
 		g = -collision[:, 1:]+collision[:, :-1]-y*collision[:, :-1]
-		cost_c = jnp.sum(jnp.max(g.reshape(g.shape[0], g.shape[1], 1), axis=-1, initial=0)) + jnp.sum(collision < 0)
+
+		# jax.debug.print("g in function: {}", jnp.shape(g))
+		#cost_c = jnp.sum(jnp.max(g.reshape(g.shape[0], g.shape[1], 1), axis=-1, initial=0)) + jnp.sum(collision < 0)
+
+		cost_c = jnp.sum(jnp.maximum(g, 0)) + jnp.sum(collision < 0)
+
+		# jax.debug.print("cost_c in function: {}", cost_c)
+
 		cost = self.cost_weights['w_pos']*cost_g + self.cost_weights['w_rot']*cost_r + self.cost_weights['w_col']*cost_c
 
 		# jax.debug.print("cost_c in function: {}", jnp.shape(cost_c))

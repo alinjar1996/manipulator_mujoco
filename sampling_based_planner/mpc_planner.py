@@ -266,6 +266,7 @@ def run_cem_planner(
     cam_name=None,
 ):
     # Initialize data structures
+    index_list = []
     cost_g_list = []
     cost_r_list = []
     cost_c_list = []
@@ -328,6 +329,10 @@ def run_cem_planner(
     lamda_init = jnp.zeros((cem.num_batch, cem.nvar))
     s_init = jnp.zeros((cem.num_batch, cem.num_total_constraints))
 
+    #Initialize EE pose
+    init_position = data.site_xpos[model.site(name="tcp").id].copy()
+    init_quaternion = data.xquat[model.body(name="hande").id].copy()
+
     # Load MLP model if inference is enabled
     if inference:
         mlp_model = load_mlp_projection_model(
@@ -336,6 +341,8 @@ def run_cem_planner(
     timestep_counter = 0
     target_idx = 0
     current_target = target_names[target_idx]
+    target_reached = False #Initialize
+
 
 
     if show_viewer:
@@ -358,8 +365,17 @@ def run_cem_planner(
                             pcd_gen.save_pcd_binary(points, colors, filename)
 
                     # Main CEM planning loop
-                    target_pos = model.body(name=current_target).pos if current_target != "home" else data.site_xpos[model.site(name="tcp").id].copy()
-                    target_quat = model.body(name=current_target).quat if current_target != "home" else data.xquat[model.body(name="hande").id].copy()
+                    # target_pos = model.body(name=current_target).pos if current_target != "home" else data.site_xpos[model.site(name="tcp").id].copy()
+                    # target_quat = model.body(name=current_target).quat if current_target != "home" else data.xquat[model.body(name="hande").id].copy()
+                    
+
+                    # Determine target position and orientation
+                    if current_target != "home":
+                        target_pos = model.body(name=current_target).pos
+                        target_quat = model.body(name=current_target).quat
+                    else:
+                        target_pos = init_position
+                        target_quat = init_quaternion
 
                     if np.isnan(xi_cov).any():
                         xi_cov = xi_cov_init
@@ -422,18 +438,25 @@ def run_cem_planner(
                     current_cost = np.round(cost, 2)
                     
                     if current_cost_g < position_threshold and current_cost_r < rotation_threshold:
-                        if target_idx == len(target_names) - 1:
+                        target_reached = True
+                    else:
+                        target_reached = False
+
+                    if target_reached:
+                        if target_idx == len(target_names) - 1: #At last target
                             if stop_at_final_target:
                                 data.qvel[:num_dof] = np.zeros(num_dof)
                             else:
                                 target_idx = 0
+                                current_target = target_names[target_idx]
                         else:
                             target_idx += 1
-                        current_target = target_names[target_idx]
+                            current_target = target_names[target_idx]
                     
-                    #ACtivate  collision free IK if cost position/rotation is less than 2*threshold
+
+                    #ACtivate  collision free IK if cost position/rotation is less than ik_threshold
                     if current_cost_g < ik_pos_thresh and current_cost_r < ik_rot_thresh:
-                        collision_free_ik = True
+                        collision_free_ik = False
                     else:
                         collision_free_ik = False
 
@@ -443,9 +466,9 @@ def run_cem_planner(
 
                         ik_solver.set_target(target_pos, target_quat)
 
-                        print("\n" + "-" * 40)
+                        print("\n" + "-" * 10)
                         print(">>> COLLISION-FREE IK IS ACTIVATED <<<")
-                        print("-" * 40 + "\n")
+                        print("-" * 10 + "\n")
                         
                         # Apply control as per MPC coupled with  CEM
                         thetadot = ik_solver.solve(dt=collision_free_ik_dt)
@@ -454,10 +477,16 @@ def run_cem_planner(
 
                         # Apply control as per MPC coupled with  CEM
                         thetadot = np.mean(best_vels[1:int(num_steps*0.9)], axis=0)
+                    
                     data.qvel[:num_dof] = thetadot
-                    mujoco.mj_step(model, data)    
+
+                    # Step the simulation
+                    mujoco.mj_step(model, data)
+
+                        
 
                     # Store data
+                    index_list.append(timestep_counter)
                     cost_g_list.append(best_cost_g)
                     cost_r_list.append(best_cost_r)
                     cost_c_list.append(best_cost_c)
@@ -465,25 +494,16 @@ def run_cem_planner(
                     theta_list.append(data.qpos[:num_dof].copy())
                     
                     cost_list.append(current_cost[-1] if isinstance(current_cost, np.ndarray) else current_cost)
-
-
-                    # # cost_list.append(float(cost[-1]) if isinstance(cost, np.ndarray) else float(cost))
-                    # if isinstance(cost, np.ndarray):
-                    #     cost_list.append(float(np.asarray(cost).squeeze()[-1]))
-                    # else:
-                    #     cost_list.append(float(cost))
-
                     best_vel_list.append(best_vels)
-                    
                     avg_primal_residual_list.append(np.mean(avg_primal_res, axis=1))
                     avg_fixed_point_residual_list.append(np.mean(avg_fixed_res, axis=1))
                     best_cost_primal_residual_list.append(avg_primal_res[:, idx_min])
                     best_cost_fixed_point_residual_list.append(avg_fixed_res[:, idx_min])
                     
-                    if not any(np.allclose(pos_, target_pos) for pos_ in target_pos_list):
-                        target_pos_list.append(target_pos)
-                    if not any(np.allclose(quat_, target_quat) for quat_ in target_quat_list):
-                        target_quat_list.append(target_quat)
+                    #if not any(np.allclose(pos_, target_pos) for pos_ in target_pos_list):
+                    target_pos_list.append(target_pos.copy())
+                    #if not any(np.allclose(quat_, target_quat) for quat_ in target_quat_list):
+                    target_quat_list.append(target_quat.copy())
                     
                     
                     # Print status
@@ -492,9 +512,10 @@ def run_cem_planner(
                         f' | Cost r: {"%.2f"%(float(current_cost_r))} | Cost c: {"%.2f"%(float(best_cost_c))} | Cost: {current_cost}')
                     # print(f'eef_quat: {data.xquat[cem.hande_id]}')
                     # print(f'eef_pos', data.site_xpos[cem.tcp_id])
-                    # print(f'target: {current_target}')
+                    print(f'target: {current_target}')
                     # print(f'target_pos', target_pos)
-                    # print(f'timetstep_counter:{timestep_counter}')
+                    print(f'timetstep_counter:{timestep_counter}')
+                    print(f'target_reached: {target_reached}')
 
                     # Update viewer
                     viewer_.sync()
@@ -514,6 +535,7 @@ def run_cem_planner(
 
                     #Saving Motion data
                     print("Saving Motion data...")
+                    np.savetxt(f'{data_dir}/index.csv', index_list, delimiter=",")
                     np.savetxt(f'{data_dir}/costs.csv', cost_list, delimiter=",")
                     np.savetxt(f'{data_dir}/thetadot.csv', thetadot_list, delimiter=",")
                     np.savetxt(f'{data_dir}/theta.csv', theta_list, delimiter=",")
@@ -529,6 +551,7 @@ def run_cem_planner(
                     
                     # Save Target positions and orientations
                     print("Saving Target positions and orientations...")
+                    print(f'target_pos_list: {len(target_pos_list)}')
                     np.savetxt(f'{data_dir}/target_positions.csv', target_pos_list, delimiter=",")
                     np.savetxt(f'{data_dir}/target_quaternions.csv', target_quat_list, delimiter=",")
                     print("Target positions and orientations saved!")

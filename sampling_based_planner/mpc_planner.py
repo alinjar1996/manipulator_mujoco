@@ -550,7 +550,6 @@ def run_cem_planner(
                     
                     # Save Target positions and orientations
                     print("Saving Target positions and orientations...")
-                    print(f'target_pos_list: {len(target_pos_list)}')
                     np.savetxt(f'{data_dir}/target_positions.csv', target_pos_list, delimiter=",")
                     np.savetxt(f'{data_dir}/target_quaternions.csv', target_quat_list, delimiter=",")
                     print("Target positions and orientations saved!")

@@ -80,9 +80,8 @@ class DataEncoder(nn.Module):
     Neural network for encoding heterogeneous Manipulation and environment data.
 
     Handles:
-    - Initial Joint Positions and Velocities (scalar values)
-    - Target Positions and Orientations (scalar values)
-    - Covariance matrix
+    - Initial Joint Positions and Velocities 
+    - Target Positions and Orientations 
     """
 
     def __init__(self, encoding_dim=None):
@@ -109,42 +108,15 @@ class DataEncoder(nn.Module):
         # Heading angles + position encoder (initial and final, final x and y)
         #Initial and FInal Joint Positions (12) + Target Position and orientation (7) = 19  
         self.position_encoder = nn.Sequential(
-            nn.Linear(4, position_hidden),  
+            nn.Linear(19, position_hidden),  
             nn.ReLU(),
             nn.BatchNorm1d(position_hidden),
             nn.Linear(position_hidden, position_hidden),
             nn.ReLU(),
         )
         
-        # # Terrain parameters encoder (lambda and p1-p4)
-        # self.terrain_encoder = nn.Sequential(
-        #     nn.Linear(m_dim , terrain_hidden),
-        #     nn.ReLU(),
-        #     nn.BatchNorm1d(terrain_hidden),
-        #     nn.Linear(terrain_hidden, terrain_hidden),
-        #     nn.ReLU(),
-        # )
         
-        # # CNN for covariance matrix
-        # self.cov_encoder = nn.Sequential(
-        #     nn.Conv1d(m_dim, cov_channels[0], 5, 1, 2),
-        #     nn.ReLU(),
-        #     nn.BatchNorm1d(cov_channels[0]),
-        #     nn.MaxPool1d(2, stride=2, padding=0),
-            
-        #     nn.Conv1d(cov_channels[0], cov_channels[1], 5, 1, 2),
-        #     nn.ReLU(),
-        #     nn.BatchNorm1d(cov_channels[1]),
-        #     nn.MaxPool1d(2, stride=2, padding=0),
-            
-        #     nn.Conv1d(cov_channels[1], cov_channels[2], 5, 1, 2),
-        #     nn.ReLU(),
-        #     nn.BatchNorm1d(cov_channels[2]),
-        #     nn.AdaptiveAvgPool1d((2)),  # Adaptive pooling to handle variable m_dim
-        # )
-        
-        # Calculate CNN output dimension based on last layer and pooling
-        # cov_output_dim = cov_channels[2] * 2
+
         
         # Fusion and final encoding layers
         # combined_dim = position_hidden + terrain_hidden + cov_output_dim
@@ -160,18 +132,16 @@ class DataEncoder(nn.Module):
             nn.Linear(fusion_dim, encoding_dim),
         )
 
-    def forward(self, initial_joint_angles, final_joint_angles, target_position, target_orientation, 
-                covariance_matrix):
+    def forward(self, initial_joint_angles, initial_joint_vels, target_position, target_orientation):
         """
         Forward pass through the network.
         
         Args:
             initial_joint_angles: initial_joint_angles (batch,6)
-            final_joint_angles: final_joint_angles (batch,6)
+            initial_joint_vels: initial_joint_vels (batch,6)
             target_position: Target positions (batch, 3)
             target_orientation: Target_orientation (batch, 3)
             
-            covariance_matrix: Covariance matrices (batch, m_dim, m_dim)
             
         Returns:
             encoded_data: Encoded representation (batch, encoding_dim)
@@ -188,7 +158,7 @@ class DataEncoder(nn.Module):
         # final_y = final_y.unsqueeze(1)
         
         # Process positions
-        positions = torch.cat([initial_joint_angles, final_joint_angles, target_position, target_orientation], dim=1)
+        positions = torch.cat([initial_joint_angles, initial_joint_vels, target_position, target_orientation], dim=1)
         position_features = self.position_encoder(positions)
         
         # # Process terrain parameters
@@ -197,17 +167,19 @@ class DataEncoder(nn.Module):
         
         # Process covariance matrix with CNN
         # Add channel dimension for CNN
-        cov_features = self.cov_encoder(covariance_matrix)
-        cov_features = cov_features.view(batch_size, -1)  # Flatten CNN output
-
+        # print("position_features", position_features.shape)
         # Combine all features
         combined_features = torch.cat([
-            position_features, 
-            cov_features
+            position_features
         ], dim=1)
+
+        # print("combined_features", combined_features.shape)
+
         
         # Final encoding
         encoded_data = self.fusion_layers(combined_features)
+
+        # print("encoded_data", encoded_data.shape)
         
         return encoded_data
 
@@ -216,8 +188,14 @@ class Flow(torch.nn.Module):
     def __init__(self, out_chan, th_i_m, th_i_s, thd_i_m, thd_i_s, x_f_m, x_f_s, q_f_m, q_f_s): 
                  #th_i_m,th_i_s,th_f_m,th_f_s,x_f_m,x_f_s,y_f_m,y_f_s,lam_m,lam_s,terrain_m,terrain_s,cov_m,cov_s):
         super().__init__()
+
+        #inp_flow_length must be total number of motion variables
+        # Here it is Joint angles + Joint velocities + Target Position + Target Orientation = (6+6+3+4) = 19
+        self.inp_flow_length = 19
+
         self.net1 = torch.nn.Sequential(
-            torch.nn.Conv1d(5, out_chan, 5, 1, 2),
+            torch.nn.Conv1d(in_channels = 98, out_channels = out_chan, 
+                            kernel_size = 5, stride = 1, padding = 2),
             torch.nn.BatchNorm1d(out_chan),
             torch.nn.LeakyReLU()
         )
@@ -252,11 +230,13 @@ class Flow(torch.nn.Module):
             torch.nn.LeakyReLU()
         )
 
-        self.out1 = torch.nn.Conv1d(out_chan+1, 2, 5, 1, 2)
-        #self.out1(x) is a tensor of shape (batch_size, 2, length(x))
+        self.out1 = torch.nn.Conv1d(out_chan+1, 1, 5, 1, 2)
+        #self.out1(x) is a tensor of shape (batch_size, 1, length(x))
 
-        self.motion_encoder = DataEncoder(encoding_dim=100)
-        self.pointnet = PointNet(inp_channel=3, emb_dims=512, hidden_dims= 64, output_channels=100)
+
+
+        self.motion_encoder = DataEncoder(encoding_dim=self.inp_flow_length)
+        self.pointnet = PointNet(inp_channel=3, emb_dims=512, hidden_dims= 64, output_channels=self.inp_flow_length)
         #self.pointnet(x) is a tensor of shape (batch_size, output_channels)
 
 
@@ -267,35 +247,25 @@ class Flow(torch.nn.Module):
         target_pos_mean, target_pos_std = x_f_m, x_f_s
         target_orientation_mean, target_orientation_std = q_f_m, q_f_s
 
-        # y_fin_mean, y_fin_std = y_f_m, y_f_s
-        # lam_mean, lam_std = [lam_m]*200, [lam_s]*200
-        # terrain_mean, terrain_std = [terrain_m]*400, [terrain_s]*400
-        # cov_mean, cov_std = [cov_m]*40000, [cov_s]*40000  # for 200x200 covariance
-
         # Normalizers
         self.theta_init_norm = Normalizer([theta_init_mean], [theta_init_std])
         self.thetadot_init_norm = Normalizer([thetadot_init_mean], [thetadot_init_std])
         # self.theta_fin_norm = Normalizer([theta_fin_mean], [theta_fin_std])
         self.target_pos_norm = Normalizer([target_pos_mean], [target_pos_std])
         self.target_orientation_norm = Normalizer([target_orientation_mean], [target_orientation_std])
-        #self.y_fin_norm = Normalizer([y_fin_mean], [y_fin_std])
-        # self.lambda_norm = Normalizer(lam_mean, lam_std)
-        # self.terrain_norm = Normalizer(terrain_mean, terrain_std)
-        # self.cov_norm = Normalizer(cov_mean, cov_std)
+
 
 
     def forward(self, x_t: Tensor, motion_data: list, t: Tensor, pcd: Tensor) -> Tensor:
         
-        theta_init = self.theta_init_norm.normalize(motion_data[0])
-        thetadot_init = self.thetadot_init_norm.normalize(motion_data[1])
+        theta_init = self.theta_init_norm.normalize(motion_data[:,:6])
+        thetadot_init = self.thetadot_init_norm.normalize(motion_data[:,6:12])
 
         # theta_fin = self.theta_fin_norm.normalize(terrain_data[1])
 
-        target_pos = self.target_pos_norm.normalize(motion_data[2])
-        target_orientation = self.target_orientation_norm.normalize(motion_data[3])
-        # lambda_params = self.lambda_norm.normalize(terrain_data[4])
-        # terrain_params = self.terrain_norm.normalize(terrain_data[5])
-        # covariance_matrix = self.cov_norm.normalize(terrain_data[6].view(terrain_data[6].size(0), -1)).view_as(terrain_data[6])
+        target_pos = self.target_pos_norm.normalize(motion_data[:,12:15])
+        target_orientation = self.target_orientation_norm.normalize(motion_data[:,15:self.inp_flow_length])
+
         
         min_pcd = pcd.min().to(DEVICE)
         max_pcd = pcd.max().to(DEVICE)
@@ -303,19 +273,62 @@ class Flow(torch.nn.Module):
 
         pcd_features = self.pointnet(pcd_scaled)
 
+        pcd_features = pcd_features[:len(x_t), :] #Will remove later
+
+
+        
+        # print(f"motion_data: {motion_data.shape}")
+        # print(f"theta_init: {theta_init.shape}")
+        # print(f"thetadot_init: {thetadot_init.shape}")
+        # print(f"target_pos: {target_pos.shape}")
+        # print(f"target_orientation: {target_orientation.shape}")
+
 
         #cond = self.terrain_encoder(theta_init, theta_fin, x_fin, y_fin, lambda_params, terrain_params, covariance_matrix)
         cond = self.motion_encoder(theta_init, thetadot_init, target_pos, target_orientation)
 
+
+
+        # x_t = x_t.unsqueeze(1)  # -> [B, 1, num_motion_var]
+        # t = t.unsqueeze(1)  # -> [B, 1, 1]
+        # cond = cond.unsqueeze(1)  # -> [B, 1, encoded_dim]
+        # pcd_features = pcd_features.unsqueeze(1)  # -> [B, 1, pointnet_out_channels]
+
+        # print(f"x_t: {x_t.shape}")
+        # print(f"cond: {cond.shape}")
+        # print(f"pcd_features: {pcd_features.shape}")
+        # print(f"t: {t.shape}")
+
+
+        # x_t = self.net1(torch.cat([x_t, cond, t, pcd_features], dim=1))
+        # print(f"x_t 1: {x_t.shape}")
+
+        # x_t = self.net2(torch.cat([x_t, cond, t, pcd_features], dim=1))
+        # x_t = self.net3(torch.cat([x_t, cond, t, pcd_features], dim=1))
+        # x_t = self.net4(torch.cat([x_t, cond, t, pcd_features], dim=1))
+        # x_t = self.net5(torch.cat([x_t, cond, t, pcd_features], dim=1))
+        # x_t = self.net6(torch.cat([x_t, cond, t, pcd_features], dim=1))
+        # x_t = self.out1(torch.cat([x_t, cond, t, pcd_features], dim=1))
+        
+
+        # x_t = x_t.unsqueeze(2)
+
         x_t = self.net1(torch.cat([x_t, cond.unsqueeze(1), t.expand(-1, -1, x_t.shape[-1]), pcd_features.unsqueeze(1)], dim=1))
+        # print(f"x_t 1: {x_t.shape}")
+
         x_t = self.net2(torch.cat([x_t, t.expand(-1, -1, x_t.shape[-1])], dim=1))
+
+        # print(f"x_t 2: {x_t.shape}")
+
         x_t = self.net3(torch.cat([x_t, t.expand(-1, -1, x_t.shape[-1])], dim=1))
         x_t = self.net4(torch.cat([x_t, t.expand(-1, -1, x_t.shape[-1])], dim=1))
         x_t = self.net5(torch.cat([x_t, t.expand(-1, -1, x_t.shape[-1])], dim=1))
         x_t = self.net6(torch.cat([x_t, t.expand(-1, -1, x_t.shape[-1])], dim=1))
         x_t = self.out1(torch.cat([x_t, t.expand(-1, -1, x_t.shape[-1])], dim=1))
+
+
       
-        return x_t
+        return x_t.squeeze(1)
 
     def step(self, x_t: Tensor, cond: list, t_start: Tensor, t_end: Tensor, pcd: Tensor) -> Tensor:	
 

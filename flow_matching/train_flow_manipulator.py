@@ -163,7 +163,7 @@ for epoch in trange(NUM_EPOCH):
 		x_1 = motion_data
 
 		x_0 = torch.randn_like(x_1)
-		t = torch.rand(len(x_1), 1, 1).to(device=DEVICE)
+		t = torch.rand(len(x_1), 1).to(device=DEVICE)
 		# print("x_0", x_0.shape)
 		# print("x_1", x_1.shape)
 		# print("t", t.shape)
@@ -186,14 +186,14 @@ for epoch in trange(NUM_EPOCH):
     #     last_loss = loss
     # print(f"Epoch: {epoch + 1}, Train Loss: {mean_loss:.3f}")
     
-    if epoch % 50 == 0:
-		print(f"Epoch: {epoch + 1}, Train Loss: {mean_loss:.3f}")
-	#writer.add_scalar('test_{}'.format(test), loss, epoch)
+    # if epoch % 50 == 0:
+	# 	print(f"Epoch: {epoch + 1}, Train Loss: {mean_loss:.3f}")
+	# #writer.add_scalar('test_{}'.format(test), loss, epoch)
 
-	if loss <= last_loss:
-		torch.save(flow.state_dict(), f"./weights/test_{test}_lowest.pt")
-		torch.save(optimizer.state_dict(), f"./opts/test_{test}_lowest.pt")
-		last_loss = loss
+	# if loss <= last_loss:
+	# 	torch.save(flow.state_dict(), f"./weights/test_{test}_lowest.pt")
+	# 	torch.save(optimizer.state_dict(), f"./opts/test_{test}_lowest.pt")
+	# 	last_loss = loss
     # if epoch % 50 == 0:
 
 

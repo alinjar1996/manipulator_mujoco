@@ -194,7 +194,7 @@ class Flow(torch.nn.Module):
         self.inp_flow_length = 19
 
         self.net1 = torch.nn.Sequential(
-            torch.nn.Conv1d(in_channels = 98, out_channels = out_chan, 
+            torch.nn.Conv1d(in_channels = 4, out_channels = out_chan, 
                             kernel_size = 5, stride = 1, padding = 2),
             torch.nn.BatchNorm1d(out_chan),
             torch.nn.LeakyReLU()
@@ -259,6 +259,7 @@ class Flow(torch.nn.Module):
     def forward(self, x_t: Tensor, motion_data: list, t: Tensor, pcd: Tensor) -> Tensor:
         
         motion_data = motion_data.to(DEVICE)
+
         theta_init = self.theta_init_norm.normalize(motion_data[:,:6])
         thetadot_init = self.thetadot_init_norm.normalize(motion_data[:,6:12])
 
@@ -278,9 +279,16 @@ class Flow(torch.nn.Module):
 
         cond = self.motion_encoder(theta_init, thetadot_init, target_pos, target_orientation)        
 
-        # x_t = x_t.unsqueeze(2)
+        x_t = x_t.unsqueeze(1)
+        t= t.unsqueeze(1)
+
+        # print(f"x_t: {x_t.shape}")
+        # print(f"cond: {cond.unsqueeze(1).shape}")
+        # print(f"t: {t.expand(-1, -1, x_t.shape[-1]).shape}")
+        # print(f"pcd_features: {pcd_features.unsqueeze(1).shape}")
 
         x_t = self.net1(torch.cat([x_t, cond.unsqueeze(1), t.expand(-1, -1, x_t.shape[-1]), pcd_features.unsqueeze(1)], dim=1))
+        
         # print(f"x_t 1: {x_t.shape}")
 
         x_t = self.net2(torch.cat([x_t, t.expand(-1, -1, x_t.shape[-1])], dim=1))

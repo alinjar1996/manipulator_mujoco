@@ -2,8 +2,16 @@
 *.csv
 *.npz
 *.pth
+*.pt 
 *.png
 *.jpg
 *.npy
 *.pcd
+*/flow_training_opts
+*/flow_test_opts
+
+     
+
+
+
 

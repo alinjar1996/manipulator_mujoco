@@ -49,8 +49,8 @@ class PointNet(nn.Module):
 
 class Normalizer:
     def __init__(self, mean, std, eps=1e-8):
-        self.mean = torch.tensor(mean, dtype=torch.float32, device=DEVICE)
-        self.std = torch.tensor(std, dtype=torch.float32, device=DEVICE)
+        self.mean = torch.tensor(mean, dtype=torch.float32).to(DEVICE)
+        self.std = torch.tensor(std, dtype=torch.float32).to(DEVICE)
         self.eps = eps
 
     def normalize(self, x):
@@ -258,6 +258,7 @@ class Flow(torch.nn.Module):
 
     def forward(self, x_t: Tensor, motion_data: list, t: Tensor, pcd: Tensor) -> Tensor:
         
+        motion_data = motion_data.to(DEVICE)
         theta_init = self.theta_init_norm.normalize(motion_data[:,:6])
         thetadot_init = self.thetadot_init_norm.normalize(motion_data[:,6:12])
 
@@ -275,41 +276,7 @@ class Flow(torch.nn.Module):
 
         pcd_features = pcd_features[:len(x_t), :] #Will remove later
 
-
-        
-        # print(f"motion_data: {motion_data.shape}")
-        # print(f"theta_init: {theta_init.shape}")
-        # print(f"thetadot_init: {thetadot_init.shape}")
-        # print(f"target_pos: {target_pos.shape}")
-        # print(f"target_orientation: {target_orientation.shape}")
-
-
-        #cond = self.terrain_encoder(theta_init, theta_fin, x_fin, y_fin, lambda_params, terrain_params, covariance_matrix)
-        cond = self.motion_encoder(theta_init, thetadot_init, target_pos, target_orientation)
-
-
-
-        # x_t = x_t.unsqueeze(1)  # -> [B, 1, num_motion_var]
-        # t = t.unsqueeze(1)  # -> [B, 1, 1]
-        # cond = cond.unsqueeze(1)  # -> [B, 1, encoded_dim]
-        # pcd_features = pcd_features.unsqueeze(1)  # -> [B, 1, pointnet_out_channels]
-
-        # print(f"x_t: {x_t.shape}")
-        # print(f"cond: {cond.shape}")
-        # print(f"pcd_features: {pcd_features.shape}")
-        # print(f"t: {t.shape}")
-
-
-        # x_t = self.net1(torch.cat([x_t, cond, t, pcd_features], dim=1))
-        # print(f"x_t 1: {x_t.shape}")
-
-        # x_t = self.net2(torch.cat([x_t, cond, t, pcd_features], dim=1))
-        # x_t = self.net3(torch.cat([x_t, cond, t, pcd_features], dim=1))
-        # x_t = self.net4(torch.cat([x_t, cond, t, pcd_features], dim=1))
-        # x_t = self.net5(torch.cat([x_t, cond, t, pcd_features], dim=1))
-        # x_t = self.net6(torch.cat([x_t, cond, t, pcd_features], dim=1))
-        # x_t = self.out1(torch.cat([x_t, cond, t, pcd_features], dim=1))
-        
+        cond = self.motion_encoder(theta_init, thetadot_init, target_pos, target_orientation)        
 
         # x_t = x_t.unsqueeze(2)
 
